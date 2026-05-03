@@ -1457,7 +1457,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         
     tool_call = _TOOL_HOOKS[tool_name]
     try:
-        if tool_name in ("acpx_agent",):
+        if tool_name in ("acpx_agent", "shell_tool_local", "docker_sandbox"):
             return tool_call(**tool_params)
 
         ret_out = await tool_call(**tool_params)
@@ -6640,7 +6640,7 @@ async def execute_tool_manually(request: Request):
     tool_func = _TOOL_HOOKS[tool_name]
     
     try:
-        if tool_name in ("acpx_agent",):
+        if tool_name in ("acpx_agent", "shell_tool_local", "docker_sandbox"):
             return tool_func(**tool_params)
 
         # 2. 执行工具

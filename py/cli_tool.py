@@ -3,6 +3,7 @@ import asyncio
 import os
 import re
 import shutil
+import signal
 import subprocess
 import json
 import platform
@@ -74,6 +75,39 @@ async def read_stream(stream, *, is_error: bool = False):
     async for line in stream:
         prefix = "[ERROR] " if is_error else ""
         yield f"{prefix}{line.decode('utf-8', errors='replace').rstrip()}"
+
+# 修改 read_stream 为分块读取，防止进度条挂起
+async def read_stream_chunks(stream, prefix=""):
+    """
+    分块读取流，不等待换行符，解决进度条显示问题。
+    """
+    if stream is None:
+        return
+    
+    try:
+        while True:
+            # 读取 4KB 数据块
+            chunk = await stream.read(4096)
+            if not chunk:
+                break
+            
+            # 尝试多种编码解码
+            decoded = ""
+            for enc in ['utf-8', 'gbk', 'cp437']:
+                try:
+                    decoded = chunk.decode(enc)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            
+            if not decoded:
+                decoded = chunk.decode('utf-8', errors='replace')
+            
+            if decoded:
+                yield f"{prefix}{decoded}"
+    except Exception as e:
+        yield f"[System Stream Error] {e}"
+
 
 async def _merge_streams(*streams):
     """合并多个异步流"""
@@ -484,15 +518,20 @@ async def _exec_docker_cmd_simple(cwd: str, cmd_list: list) -> str:
 # ==================== Docker 环境工具实现 (含新功能) ====================
 
 async def docker_sandbox(command: str, background: bool = False) -> str | AsyncIterator[str]:
-    """[Docker] 在沙盒中执行命令，增加了超时自动终止逻辑"""
+    """
+    [Docker] 沙盒执行（打平版，直接返回异步生成器）
+    """
     settings = await load_settings()
     cwd = settings.get("CLISettings", {}).get("cc_path")
-    if not cwd: return "Error: No workspace directory specified in settings."
+    if not cwd:
+        yield "Error: No workspace directory specified."
+        return
     
     try:
         container_name = await get_or_create_docker_sandbox(cwd)
     except Exception as e:
-        return f"Docker Sandbox Error: {str(e)}"
+        yield f"Docker Sandbox Error: {str(e)}"
+        return
 
     exec_cmd = ["docker", "exec", "-i", container_name, "sh", "-c", f"cd /workspace && {command}"]
     
@@ -505,55 +544,41 @@ async def docker_sandbox(command: str, background: bool = False) -> str | AsyncI
 
         if background:
             pid = await process_manager.register_process(process, f"[Docker] {command}", "docker")
-            return f"[SUCCESS] Docker background process started.\nPID: {pid}"
+            yield f"[SUCCESS] Docker background process started.\nPID: {pid}"
+            return
 
-        async def _stream() -> AsyncIterator[str]:
-            output_yielded = False
-            error_yielded = False
-            start_time = time.time()
-            
-            try:
-                # 迭代 Docker 输出流
-                stream_gen = _merge_streams(
-                    read_stream(process.stdout, is_error=False),
-                    read_stream(process.stderr, is_error=True),
-                )
-                
-                while True:
-                    remaining = COMMAND_TIMEOUT - (time.time() - start_time)
-                    if remaining <= 0:
-                        raise asyncio.TimeoutError()
-                    
-                    try:
-                        line = await asyncio.wait_for(stream_gen.__anext__(), timeout=remaining)
-                        yield line
-                        output_yielded = True
-                        if line.startswith("[ERROR]"): error_yielded = True
-                    except StopAsyncIteration:
-                        break
+        queue = asyncio.Queue()
+        async def wrap_stdout():
+            async for chunk in read_stream_chunks(process.stdout, ""):
+                await queue.put(chunk)
+        async def wrap_stderr():
+            async for chunk in read_stream_chunks(process.stderr, "[Docker stderr] "):
+                await queue.put(chunk)
 
-                await asyncio.wait_for(process.wait(), timeout=5)
+        stdout_task = asyncio.create_task(wrap_stdout())
+        stderr_task = asyncio.create_task(wrap_stderr())
 
-                if process.returncode != 0:
-                    yield f"\n--- Docker 执行失败 ---"
-                    if not error_yielded and process.returncode == 127:
-                        yield f"[ERROR] sh: {command.split()[0]}: not found (命令在容器中不存在)"
-                    yield get_detailed_exit_info(process.returncode, command)
-                    yield "💡 注意：您当前在 Docker 容器内，某些主机上的工具可能无法直接访问。"
-                elif not output_yielded:
-                    yield "[SUCCESS] 命令在 Docker 中成功执行"
+        start_time = time.time()
+        try:
+            while not (stdout_task.done() and stderr_task.done() and queue.empty()):
+                remaining = COMMAND_TIMEOUT - (time.time() - start_time)
+                if remaining <= 0:
+                    raise asyncio.TimeoutError()
+                try:
+                    content = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    yield content
+                except asyncio.TimeoutError:
+                    continue
 
-            except asyncio.TimeoutError:
-                # Docker 超时处理：杀掉宿主机的 docker exec 进程
-                if process.returncode is None:
-                    process.kill() 
-                yield f"\n\n[TIMEOUT ERROR] Docker 命令执行超时（限时 {COMMAND_TIMEOUT} 秒）。"
-                yield "💡 提示：检测到该命令长时间未结束。如果是耗时任务，请使用 `background: true` 参数将其放入后台。"
-                yield "对于 Docker 任务，后台运行后您可以使用 `manage_processes` 查看日志。"
-
-        return _stream()
+            await process.wait()
+            if process.returncode != 0:
+                yield f"\n--- Docker 运行结束 (Exit Code: {process.returncode}) ---"
+                yield get_detailed_exit_info(process.returncode, command)
+        except asyncio.TimeoutError:
+            process.kill()
+            yield f"\n\n[TIMEOUT ERROR] Docker 命令执行超时（限时 {COMMAND_TIMEOUT} 秒）。"
     except Exception as e:
-        return f"[ERROR] Docker 进程启动失败: {str(e)}"
+        yield f"[ERROR] Docker 进程启动失败: {str(e)}"
 
 async def edit_file_patch_tool(path: str, old_string: str, new_string: str) -> str:
     """[Docker] 精确字符串替换"""
@@ -1094,31 +1119,30 @@ async def read_stream(stream, *, is_error: bool = False):
 
 
 async def shell_tool_local(command: str, background: bool = False) -> str | AsyncIterator[str]:
-    """[Local] 执行本地命令，增强了错误捕获、诊断能力及超时控制"""
+    """
+    [Local] 执行本地命令（打平版，直接返回异步生成器）
+    """
     settings = await load_settings()
     cwd = settings.get("CLISettings", {}).get("cc_path")
     perm = settings.get("localEnvSettings", {}).get("permissionMode", "default")
     
     if not cwd: 
-        return "Error: No workspace directory specified."
+        # 如果是生成器，错误也需要 yield 出来
+        yield "Error: No workspace directory specified."
+        return
     
-    # 安全检查 (保持原样)
     allowed, result = validate_bash_command(command, cwd, mode=perm)
     if not allowed:
-        return f"[Security] Command blocked: {result}"
+        yield f"[Security] Command blocked: {result}"
+        return
     
-    # 系统与 Shell 选择逻辑 (保持原样)
     system = platform.system()
     if system == "Windows":
         def is_strictly_cmd(cmd_str: str) -> bool:
             c = cmd_str.lower().strip()
             if re.search(r'%[a-z0-9_]+%', c): return True
-            if re.search(r'^(dir|del|copy|xcopy|rmdir|rd|md|mkdir|ren|rename)\s+/[a-z]', c): return True
-            if re.search(r'^set\s+[a-z0-9_]+=', c): return True
-            if re.search(r'^(mklink|call|goto|if exist|for /)\b', c): return True
             if '&&' in c and '$' not in c: return True
             return False
-
         if is_strictly_cmd(command):
             exe, args = "cmd.exe", ["/c", command]
         else:
@@ -1127,92 +1151,59 @@ async def shell_tool_local(command: str, background: bool = False) -> str | Asyn
         exe, args = os.environ.get('SHELL', '/bin/bash'), ["-c", command]
 
     try:
-        proc = await asyncio.create_subprocess_exec(
+        process = await asyncio.create_subprocess_exec(
             exe, *args,
             stdout=asyncio.subprocess.PIPE, 
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
-            env=os.environ.copy()
+            env=os.environ.copy(),
+            start_new_session=(system != "Windows")
         )
 
         if background:
-            pid = await process_manager.register_process(proc, command, "local")
-            return f"[SUCCESS] Background process started.\nPID: {pid}\nUse 'manage_processes_local' to check."
+            pid = await process_manager.register_process(process, command, "local")
+            yield f"[SUCCESS] Background process started.\nPID: {pid}"
+            return
 
-        async def _stream():
-            output_received = False
-            error_received = False
-            
-            try:
-                # 使用 asyncio.wait_for 包装整个流读取过程
-                # 注意：这里需要将合并流的迭代放入一个任务或特定的包装器中
-                async def consume_streams():
-                    nonlocal output_received, error_received
-                    async for line in _merge_streams(
-                        read_stream(proc.stdout, is_error=False), 
-                        read_stream(proc.stderr, is_error=True)
-                    ):
-                        yield line
-                        output_received = True
-                        if line.startswith("[ERROR]"):
-                            error_received = True
-                
-                # 核心逻辑：设置 5 分钟硬超时
+        # --- 直接开始 yield 逻辑 ---
+        queue = asyncio.Queue()
+        
+        async def wrap_stdout():
+            async for chunk in read_stream_chunks(process.stdout, ""):
+                await queue.put(chunk)
+        async def wrap_stderr():
+            async for chunk in read_stream_chunks(process.stderr, "[stderr] "):
+                await queue.put(chunk)
+
+        stdout_task = asyncio.create_task(wrap_stdout())
+        stderr_task = asyncio.create_task(wrap_stderr())
+
+        start_time = time.time()
+        try:
+            while not (stdout_task.done() and stderr_task.done() and queue.empty()):
+                remaining = COMMAND_TIMEOUT - (time.time() - start_time)
+                if remaining <= 0:
+                    raise asyncio.TimeoutError()
                 try:
-                    # 使用 wait_for 驱动生成器
-                    # 由于是 AsyncIterator，我们需要手动迭代并检查时间，或者包裹在 timeout 块中
-                    start_time = time.time()
-                    gen = consume_streams()
-                    while True:
-                        # 每次读取下一行时计算剩余时间
-                        remaining = COMMAND_TIMEOUT - (time.time() - start_time)
-                        if remaining <= 0:
-                            raise asyncio.TimeoutError()
-                        
-                        try:
-                            line = await asyncio.wait_for(gen.__anext__(), timeout=remaining)
-                            yield line
-                        except StopAsyncIteration:
-                            break
-                    
-                    await asyncio.wait_for(proc.wait(), timeout=5) # 最后等待进程结束
-
+                    content = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    yield content
                 except asyncio.TimeoutError:
-                    # 发生超时：杀掉进程并通知 AI
-                    if proc.returncode is None:
-                        try:
-                            proc.terminate() # 尝试正常关闭
-                            # Windows 下 terminate 有时无效，等 1 秒不行就 kill
-                            await asyncio.sleep(1)
-                            if proc.returncode is None:
-                                proc.kill()
-                        except:
-                            pass
-                    
-                    yield f"\n\n[TIMEOUT ERROR] 命令执行已超过 {COMMAND_TIMEOUT} 秒。"
-                    yield "💡 诊断建议：该命令可能是一个阻塞式任务或交互式程序。"
-                    yield "如果您希望该任务在后台持续运行，请在调用此工具时设置参数 `background: true`。"
-                    yield "如果您只是想查看运行结果，请检查命令是否陷入了死循环或正在等待用户输入。"
-                    return # 结束生成器
+                    continue
 
-                if proc.returncode != 0:
-                    yield f"\n--- 运行失败 ---"
-                    if not error_received:
-                        cmd_name = command.strip().split()[0]
-                        if proc.returncode == 9009 and system == "Windows":
-                            yield f"[ERROR] '{cmd_name}' 不是内部或外部命令。"
-                        elif proc.returncode == 127:
-                            yield f"[ERROR] sh: {cmd_name}: command not found"
-                    yield get_detailed_exit_info(proc.returncode, command)
-                elif not output_received:
-                    yield "[SUCCESS] 命令已成功执行"
-
-            except Exception as e:
-                yield f"[系统错误] 流处理异常: {str(e)}"
-                
-        return _stream()
+            await process.wait()
+            if process.returncode != 0:
+                yield f"\n--- 运行结束 (Exit Code: {process.returncode}) ---"
+                yield get_detailed_exit_info(process.returncode, command)
+        except asyncio.TimeoutError:
+            if system == "Windows":
+                subprocess.run(f"taskkill /F /T /PID {process.pid}", shell=True, capture_output=True)
+            else:
+                try: os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                except: process.kill()
+            yield f"\n\n[TIMEOUT ERROR] 命令执行超过 {COMMAND_TIMEOUT} 秒已强制终止。"
     except Exception as e: 
-        return f"[系统错误] 无法启动进程: {str(e)}"
+        yield f"[系统错误] 无法启动进程: {str(e)}"
+
 
 # 恢复原有的 Local 文件工具
 async def list_files_tool_local(path: str = ".", show_all: bool = True) -> str:
