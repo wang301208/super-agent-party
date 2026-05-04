@@ -32,6 +32,8 @@ app.get('/', (req, res) => res.sendFile(path.join(EXT_DIR, 'index.html')));
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 // 4. Add custom API routes here
+// app.get('/api/data', (req, res) => { ... });
+// app.post('/api/action', (req, res) => { ... });
 
 // 5. Listen on assigned port at loopback only
 app.listen(PORT, '127.0.0.1', () => {
@@ -82,6 +84,22 @@ SAP proxies requests through:
 ```
 
 The proxy forwards method, headers, body, and query params to `http://127.0.0.1:{port}/{path}`.
+
+## MCP / AI Tool Registration
+
+MCP tool registration is done in the **frontend** (`index.html`) via WebSocket, not in the Node.js backend. The `index.js` file handles:
+
+- Static file serving
+- Custom API routes (called by the frontend)
+- Backend logic (DB queries, file processing, external API calls)
+
+The frontend registers MCP tools via WebSocket and handles `call_mcp_tool` events. Those handlers can optionally call the Node.js backend API for server-side operations. See the main SKILL.md for MCP implementation details.
+
+## Important Notes
+
+- **Font Awesome**: Use CDN in `index.html` (`cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css`). Relative paths like `../../fontawesome/` do NOT work because the extension is served from Express on a different port, not from SAP's static file directory.
+- **Static assets**: Place all CSS/JS files in the extension root directory. Express serves them via `express.static(EXT_DIR)`, so they are accessible at the same path level as `index.html`.
+- **API routes**: Express JSON body parsing is NOT included by default. Add `app.use(express.json())` if your API routes need JSON request bodies.
 
 ## Cleanup
 

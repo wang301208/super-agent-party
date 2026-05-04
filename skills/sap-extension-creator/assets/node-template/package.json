@@ -9,6 +9,9 @@
   "category": "Uncategorized",
   "main": "index.js",
   "nodePort": 0,
+  "width": 800,
+  "height": 600,
+  "transparent": false,
   "dependencies": {
     "express": "^5.1.0"
   }

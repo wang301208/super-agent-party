@@ -59,7 +59,7 @@ The extension's `index.html` MUST implement:
 
 1. **Compact mode CSS** — detect small window size and switch layout (see template)
 2. **`-webkit-app-region: drag`** — on header/footer so the frameless window can be moved
-3. **`-webkit-app-region: no-drag`** — on all interactive elements (buttons, inputs) so they remain clickable
+3. **`-webkit-app-region: no-drag`** — on all interactive elements (buttons, inputs, select, a, .compact-close-btn) so they remain clickable
 4. **Custom close button** — since there's no native title bar, the extension must provide its own close button
 
 ### Typical Transparent Extension package.json
@@ -97,6 +97,40 @@ The `width` and `height` fields define the **default** window size, but users ca
 | Mini widget / controller | 260–320 | 60–100 | true |
 | Dashboard panel | 600–800 | 400–600 | false |
 | Tool popup | 400–500 | 300–500 | false |
+
+## MCP / AI Tool Registration
+
+Both static and Node.js extensions can register AI tools via WebSocket using `register_node_extension_mcp`. The message type name is historical ("node" in the name) but works for any extension:
+
+```js
+ws.send(JSON.stringify({
+  type: 'register_node_extension_mcp',
+  data: {
+    ext_id: extId,
+    tools: [/* ... */]
+  }
+}));
+```
+
+This is done in the frontend (index.html), not in the Node.js backend. The backend (index.js) is only for server-side API routes.
+
+## Font Awesome
+
+Use CDN for reliable loading in both static and Node.js modes:
+
+```html
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+```
+
+Avoid relative paths like `../../fontawesome/css/all.min.css` — they may work for static extensions (served from SAP's static directory) but break for Node.js extensions (served from Express on a different path).
+
+## Theme & i18n
+
+All extensions should implement:
+- **Dark/Light mode** via CSS variables on `:root` and `body.dark`, persisted to localStorage
+- **Chinese/English i18n** with a language toggle, also persisted to localStorage
+
+Each extension defines its own theme colors (do NOT hardcode SAP's colors). See the templates for complete implementations.
 
 ## Examples
 

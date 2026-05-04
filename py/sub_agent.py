@@ -55,6 +55,12 @@ class SubAgentExecutor:
         try:
             async with httpx.AsyncClient(timeout=600.0) as http_client:
                 while iteration < max_iterations:
+
+                    latest_task = await task_center.get_task(task_id)
+                    if latest_task and latest_task.status == TaskStatus.CANCELLED:
+                        print(f"[SubAgent] Task {task_id} was cancelled, stopping.")
+                        return {"success": False, "error": "Task cancelled by user"}
+
                     iteration += 1
                     current_progress = 10 + int((iteration / max_iterations) * 80)
                     
@@ -318,6 +324,11 @@ class SubAgentExecutor:
                         # --- 定期更新 ---
                         now = asyncio.get_event_loop().time()
                         if now - last_update_time >= UPDATE_INTERVAL:
+                            current_task = await task_center.get_task(task_id)
+                            if current_task and current_task.status == TaskStatus.CANCELLED:
+                                print(f"[SubAgent] Stream aborted due to cancellation of {task_id}")
+                                return ""  # 直接返回空内容，外层会捕获到取消并退出
+
                             await task_center.update_task_progress(
                                 task_id, base_progress, status=TaskStatus.RUNNING,
                                 context={"history": display_history, "live_content": full_content[-800:] if full_content else ""}

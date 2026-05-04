@@ -13,8 +13,8 @@ create_subtask_tool = {
         "parameters": {
             "type": "object",
             "properties": {
-                "title": {"type": "string", "description": "子任务标题"},
-                "description": {"type": "string", "description": "任务详细目标"},
+                "title": {"type": "string", "description": "子任务标题，不要体现发到哪个平台，而是在platforms中指定。"},
+                "description": {"type": "string", "description": "任务详细目标，目标中不要体现发到哪个平台，而是在platforms中指定。这会导致子智能体无法完成任务。"},
                 "task_type": {
                     "type": "string",
                     "enum": ["once", "time", "cycle"],
