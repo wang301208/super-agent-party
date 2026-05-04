@@ -353,7 +353,7 @@ let vue_data = {
     webSearchSettings: {
       enabled: false,
       engine: 'tavily',
-      crawler: 'jina',
+      crawler: 'mdnew',
       when: 'after_thinking',
       duckduckgo_max_results: 10, // 默认值
       searxng_url: `http://127.0.0.1:8080`,

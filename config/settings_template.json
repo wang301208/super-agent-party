@@ -118,7 +118,7 @@
     "webSearch": {
       "enabled": false,
       "engine": "tavily",
-      "crawler": "jina",
+      "crawler": "mdnew",
       "when": "after_thinking",
       "duckduckgo_max_results": 10,
       "searxng_url": "http://127.0.0.1:8080",

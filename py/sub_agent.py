@@ -45,8 +45,8 @@ class SubAgentExecutor:
         await task_center.update_task_progress(task.task_id, 0, status=TaskStatus.RUNNING)
         
         iteration = 0
-        conversation_history = []
-        assistant_only_history = task.context.get("history", [])
+        conversation_history =[]
+        assistant_only_history = task.context.get("history",[])
         
         system_prompt = self._build_system_prompt(task, consensus_content)
         conversation_history.append({"role": "system", "content": system_prompt})
@@ -69,10 +69,15 @@ class SubAgentExecutor:
                         task.task_id, task_center, current_progress, assistant_only_history
                     )
                     
+                    # 避免在遇到网络断连时造成高频请求死循环
+                    if not assistant_response.strip():
+                        print(f"[SubAgent] 警告: 第 {iteration} 次迭代收到空回复(可能是API连接失败)，休眠3秒...")
+                        await asyncio.sleep(3)
+
                     conversation_history.append({"role": "assistant", "content": assistant_response})
                     
                     latest_task = await task_center.get_task(task_id)
-                    # 检查是否通过工具完成
+                    # 检查是否通过工具完成（此时必定不会再被意外覆盖了）
                     if latest_task.status == TaskStatus.COMPLETED:
                         return await self._finalize_task_record(task_id, task_center, latest_task.result, assistant_only_history, iteration)
 
@@ -104,7 +109,7 @@ class SubAgentExecutor:
         config = task.context.get("trigger_config", {})
         
         # 1. 结果存档
-        results_history = task.context.get("results_history", [])
+        results_history = task.context.get("results_history",[])
         results_history.append({
             "time": datetime.now().isoformat(),
             "result": result,
@@ -133,7 +138,7 @@ class SubAgentExecutor:
                     next_run_at = next_run.isoformat()
                 except: pass
         elif t_type == "time":
-            days = config.get("days", [])
+            days = config.get("days",[])
             if days and len(days) > 0:
                 final_status = TaskStatus.PENDING
                 final_progress = 0
@@ -156,7 +161,7 @@ class SubAgentExecutor:
             context=new_ctx
         )
 
-        # 5. 多渠道推送逻辑 (修复核心点)
+        # 5. 多渠道推送逻辑
         target_platforms = task.platforms if task.platforms else ["chat"]
         
         # A. 始终推送到网页端 (WebSocket)
@@ -179,7 +184,6 @@ class SubAgentExecutor:
                 print(f"[TaskExecutor] 平台 {platform} 尚未注册 handler，跳过推送")
                 continue
 
-            # 提前定义好 trigger 和 action，供所有分支使用
             trigger_obj = BehaviorTrigger(
                 type="time",
                 time=BehaviorTriggerTime(timeValue="00:00:00", days=[]),
@@ -200,12 +204,10 @@ class SubAgentExecutor:
 
             targets = global_behavior_engine.platform_targets.get(platform, [])
             if not targets:
-                # 没有显式配置目标 ChatID，传入空字符串交给 handler 自己去 fallback
                 print(f"[TaskExecutor] 平台 {platform} 未配置目标 ChatID，尝试使用空 ID 触发 fallback")
                 asyncio.create_task(handler("", fake_behavior))
                 continue
 
-            # 有显式目标时原逻辑
             for chat_id in set(targets):
                 if chat_id:
                     print(f"[TaskExecutor] 正在触发平台动作 -> {platform}:{chat_id}")
@@ -213,7 +215,6 @@ class SubAgentExecutor:
 
         return {"success": True, "task_id": task_id, "result": result}
 
-    # sub_agent.py - _call_llm_stream_only 极简版
 
     async def _call_llm_stream_only(
         self, http_client, messages, model, task_id, task_center, 
@@ -221,38 +222,31 @@ class SubAgentExecutor:
     ) -> str:
         payload = {
             "messages": messages, "model": model, "stream": True, "is_sub_agent": True,
-            "disable_tools": ["create_subtask", "query_tasks_tool", "cancel_subtask"]
+            "disable_tools":["create_subtask", "query_tasks_tool", "cancel_subtask"]
         }
         
         full_content = ""
         current_text_buffer = ""
-        
-        # ★ 流式缓冲区：就是简单的一个字符串
         stream_buffer = ""
         stream_title = ""
-        
         last_update_time = asyncio.get_event_loop().time()
         UPDATE_INTERVAL = 2.0
         
         def _push_line(line: str):
-            """把一行写入 display_history"""
             stripped = line.strip()
             if not stripped:
                 return
             display_history.append(stripped)
         
         def _flush_buffer():
-            """把 stream_buffer 里剩下的内容拆行写入 display_history"""
             nonlocal stream_buffer, stream_title
             if not stream_buffer:
                 return
             
-            # 先加标题
             if stream_title:
                 display_history.append(f"📡 [{stream_title}]")
                 stream_title = ""
             
-            # 按换行拆开，逐行追加
             for part in stream_buffer.split("\n"):
                 _push_line(part)
             
@@ -268,13 +262,11 @@ class SubAgentExecutor:
                         chunk = json.loads(data_str)
                         delta = chunk["choices"][0].get("delta", {})
                         
-                        # --- 文本内容：刷掉流式缓冲区 ---
                         if delta.get("content"):
                             _flush_buffer()
                             full_content += delta["content"]
                             current_text_buffer += delta["content"]
                         
-                        # --- 工具调用：刷掉流式缓冲区 ---
                         if delta.get("tool_calls"):
                             _flush_buffer()
                             if current_text_buffer.strip():
@@ -283,7 +275,6 @@ class SubAgentExecutor:
                             for tc in delta["tool_calls"]:
                                 display_history.append(f"🔧 Calling: {tc.get('function',{}).get('name','?')}")
                         
-                        # --- 工具结果 ---
                         tool = delta.get("tool_content")
                         if tool:
                             ttype = tool.get("type", "")
@@ -294,12 +285,9 @@ class SubAgentExecutor:
                                 continue
                             
                             if ttype == "tool_result_stream":
-                                # ★ 记下标题
                                 if not stream_title:
                                     stream_title = title
-                                # ★ 追加到缓冲区
                                 stream_buffer += content
-                                # ★ 遇到换行符就拆出来逐行写入
                                 while "\n" in stream_buffer:
                                     line, stream_buffer = stream_buffer.split("\n", 1)
                                     if not stream_title:
@@ -321,16 +309,16 @@ class SubAgentExecutor:
                                 _flush_buffer()
                                 display_history.append(f"📋 [{title}]\n{content[:300]}")
                         
-                        # --- 定期更新 ---
                         now = asyncio.get_event_loop().time()
                         if now - last_update_time >= UPDATE_INTERVAL:
                             current_task = await task_center.get_task(task_id)
                             if current_task and current_task.status == TaskStatus.CANCELLED:
                                 print(f"[SubAgent] Stream aborted due to cancellation of {task_id}")
-                                return ""  # 直接返回空内容，外层会捕获到取消并退出
+                                return ""
 
+                            # 修复核心点1：将 status=TaskStatus.RUNNING 删去或改为 status=None，防止抹去已触发的完成状态
                             await task_center.update_task_progress(
-                                task_id, base_progress, status=TaskStatus.RUNNING,
+                                task_id, base_progress, status=None,
                                 context={"history": display_history, "live_content": full_content[-800:] if full_content else ""}
                             )
                             last_update_time = now
@@ -339,13 +327,13 @@ class SubAgentExecutor:
         except Exception as e:
             print(f"[SubAgent] Stream error: {e}")
         
-        # 最后刷掉所有缓冲
         _flush_buffer()
         if current_text_buffer.strip():
             display_history.append(current_text_buffer.strip())
         
+        # 修复核心点2：同样将结尾强制覆盖状态的逻辑移除
         await task_center.update_task_progress(
-            task_id, base_progress + 10, status=TaskStatus.RUNNING,
+            task_id, base_progress + 10, status=None,
             context={"history": display_history, "live_content": full_content[-1000:] if full_content else ""}
         )
         
@@ -357,18 +345,23 @@ class SubAgentExecutor:
         return p
 
     async def _check_task_completion_smart(self, task, conversation_history, http_client):
-        msgs = [{"role": "system", "content": "判断任务目标是否已达成？只回YES/NO"}, {"role": "user", "content": f"目标:{task.description}\n历史:{str(conversation_history)[-2000:]}"}]
+        msgs =[{"role": "system", "content": "判断任务目标是否已达成？只回YES/NO"}, {"role": "user", "content": f"目标:{task.description}\n历史:{str(conversation_history)[-2000:]}"}]
         try:
             resp = await http_client.post(self.simple_chat_endpoint, json={"messages": msgs, "model": "super-model"})
             return resp.json()["choices"][0]["message"]["content"].strip().upper().startswith("YES")
-        except: return False
+        except Exception as e:
+            # 加入日志，不要悄悄失败
+            print(f"[_check_task_completion_smart] 兜底检查请求失败: {e}")
+            return False
 
     async def _extract_final_result(self, task, conversation_history, http_client):
-        msgs = [{"role": "system", "content": "请从对话中提取出任务的最终执行产出。"}, {"role": "user", "content": f"历史:{str(conversation_history)[-4000:]}"}]
+        msgs =[{"role": "system", "content": "请从对话中提取出任务的最终执行产出。"}, {"role": "user", "content": f"历史:{str(conversation_history)[-4000:]}"}]
         try:
             resp = await http_client.post(self.simple_chat_endpoint, json={"messages": msgs, "model": "super-model"})
             return {"full": resp.json()["choices"][0]["message"]["content"].strip()}
-        except: return {"full": "任务执行完成，未提取到明确结果。"}
+        except Exception as e:
+            print(f"[_extract_final_result] 结果提取请求失败: {e}")
+            return {"full": "任务执行完成，未提取到明确结果。"}
 
 async def run_subtask_in_background(task_id: str, workspace_dir: str, settings: Dict, consensus_content: Optional[str] = None):
     executor = SubAgentExecutor(workspace_dir, settings)
