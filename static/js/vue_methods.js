@@ -3360,26 +3360,20 @@ let vue_methods = {
     },
 
     // 打开工具块详情（点击折叠块时）
-    openToolBlockDetail(message, blockIndex) {
-        const block = message.displayBlocks[blockIndex];
+    openToolBlockDetail(message, block) {
         if (!block || !this.isToolBlock(block)) return;
         
-        // 将选中的块对象保存在 data 中
+        // 直接保存块对象和消息引用
         this.activeToolBlock = {
             messageIndex: this.messages.indexOf(message),
-            blockIndex: blockIndex,
+            blockIndex: message.displayBlocks.indexOf(block), // 保留原始索引，用于可能的后续操作
             block: block
         };
         
-        // 切换到工具详情视图
         this.activeSideView = 'toolDetail';
-        
-        // 确保侧边栏打开
         if (!this.sidePanelOpen) {
-            this.expandSidePanel();  // 是你已有的方法
+            this.expandSidePanel();
         }
-        
-        // 刷新一下宽度（如果有需要）
         this.updatePanelWidths();
     },
 

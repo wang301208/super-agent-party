@@ -1265,7 +1265,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                 <template v-for="(block, bIndex) in getVisibleBlocks(message)" :key="'blk-'+bIndex">
                                     
                                     <!-- 如果是最后一个块且消息未完成，或者不是工具类块，正常渲染 -->
-                                    <template v-if="(bIndex === message.displayBlocks.length - 1 && !message.generationFinished) || !isToolBlock(block)">
+                                    <template v-if="(message.displayBlocks.length > 0 && block === message.displayBlocks[message.displayBlocks.length - 1] && !message.generationFinished) || !isToolBlock(block)">
                                         <!-- 这里保留你原来的所有类型的完整渲染代码 -->
                                         <!-- 1. 深度思考块 -->
                                         <div v-if="block.type === 'reasoning'" class="sap-process-block type-reasoning">
@@ -1315,7 +1315,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                     </template>
 
                                     <!-- 否则（其他已完成工具块）折叠为占位行，只显示标题 -->
-                                    <div v-else class="sap-process-block collapsed-tool-block" @click="openToolBlockDetail(message, bIndex)">
+                                     <div v-else class="sap-process-block collapsed-tool-block" @click="openToolBlockDetail(message, block)">
                                         <div class="sp-header">
                                             <i v-if="block.type === 'tool_call'" class="fa-solid fa-wrench"></i>
                                             <i v-else-if="block.type === 'tool_result'" class="fa-solid fa-check"></i>
@@ -16962,7 +16962,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                 <template v-for="(block, bIndex) in getVisibleBlocks(message)" :key="'blk-'+bIndex">
                                     
                                     <!-- 如果是最后一个块且消息未完成，或者不是工具类块，正常渲染 -->
-                                    <template v-if="(bIndex === message.displayBlocks.length - 1 && !message.generationFinished) || !isToolBlock(block)">
+                                    <template v-if="(message.displayBlocks.length > 0 && block === message.displayBlocks[message.displayBlocks.length - 1] && !message.generationFinished) || !isToolBlock(block)">
                                         <!-- 这里保留你原来的所有类型的完整渲染代码 -->
                                         <!-- 1. 深度思考块 -->
                                         <div v-if="block.type === 'reasoning'" class="sap-process-block type-reasoning">
@@ -17012,7 +17012,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                     </template>
 
                                     <!-- 否则（其他已完成工具块）折叠为占位行，只显示标题 -->
-                                    <div v-else class="sap-process-block collapsed-tool-block" @click="openToolBlockDetail(message, bIndex)">
+                                     <div v-else class="sap-process-block collapsed-tool-block" @click="openToolBlockDetail(message, block)">
                                         <div class="sp-header">
                                             <i v-if="block.type === 'tool_call'" class="fa-solid fa-wrench"></i>
                                             <i v-else-if="block.type === 'tool_result'" class="fa-solid fa-check"></i>
