@@ -4446,6 +4446,7 @@ let vue_methods = {
     },
     async fetchModelsForProvider(provider) {
       try {
+        console.log('Fetching models for provider:', provider.vendor);
         const response = await fetch(`/v1/providers/models`, {
           method: 'POST',
           headers: {
@@ -4453,7 +4454,8 @@ let vue_methods = {
           },
           body: JSON.stringify({
             url: provider.url,
-            api_key: provider.apiKey
+            api_key: provider.apiKey,
+            vendor: provider.vendor
           })
         });
         if (!response.ok) {
@@ -4537,7 +4539,7 @@ let vue_methods = {
         'ttswebui': this.isdocker ? 'http://host.docker.internal:7778/v1' : 'http://127.0.0.1:7778/v1',
         'SGLang': this.isdocker ? 'http://host.docker.internal:3000/v1' : 'http://127.0.0.1:3000/v1', 
         'llama.cpp': this.isdocker ? 'http://host.docker.internal:8080/v1' : 'http://127.0.0.1:8080/v1',
-        'Gemini': 'https://generativelanguage.googleapis.com/v1beta/openai',
+        'Gemini': 'https://generativelanguage.googleapis.com',
         'Anthropic': 'https://api.anthropic.com/v1',
         'Grok': 'https://api.groq.com/openai/v1',
         'mistral': 'https://api.mistral.ai/v1',

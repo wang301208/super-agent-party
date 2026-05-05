@@ -375,7 +375,7 @@ import aiofiles
 import argparse
 from py.dify_openai import DifyOpenAIAsync
 from py.ClaudeAsOpenAI import AsyncClaudeAsOpenAI
-
+from py.GeminiAsOpenAI import AsyncGeminiAsOpenAI
 from py.get_setting import EXT_DIR, IS_DOCKER, SKILLS_DIR, _copy_default_skills, convert_to_opus_simple, load_covs, load_settings, save_covs,save_settings,clean_temp_files_task,base_path,configure_host_port,UPLOAD_FILES_DIR,AGENT_DIR,MEMORY_CACHE_DIR,KB_DIR,DEFAULT_VRM_DIR,USER_DATA_DIR,LOG_DIR,TOOL_TEMP_DIR,COVS_PATH
 from py.llm_tool import get_image_base64,get_image_media_type
 timetamp = time.time()
@@ -651,6 +651,8 @@ def get_client_class(config, provider_id):
         return DifyOpenAIAsync 
     elif vendor == 'customAnthropic':
         return AsyncClaudeAsOpenAI
+    elif vendor == 'Gemini':
+        return AsyncGeminiAsOpenAI
     else: 
         return AsyncOpenAI
 
@@ -6789,18 +6791,46 @@ async def get_agents():
 class ProviderModelRequest(BaseModel):
     url: str
     api_key: str
+    vendor: Optional[str] = None  # 可选字段，用于指定供应商
 
 @app.post("/v1/providers/models")
 async def fetch_provider_models(request: ProviderModelRequest):
     try:
-        # 使用传入的provider配置创建AsyncOpenAI客户端
-        client = AsyncOpenAI(api_key=request.api_key, base_url=request.url)
-        # 获取模型列表
+        global global_http_client
+        vendor = getattr(request, 'vendor', None)
+        print(f"Fetching models from provider: {vendor} at URL: {request.url}")
+        # 1. 拦截 Claude
+        if vendor == 'customAnthropic':
+            client = AsyncClaudeAsOpenAI(
+                api_key=request.api_key, 
+                base_url=request.url,
+                http_client=global_http_client
+            )
+        # 2. 拦截 Gemini
+        elif vendor == 'Gemini':
+            client = AsyncGeminiAsOpenAI(
+                api_key=request.api_key,
+                base_url=request.url,
+                http_client=global_http_client
+            )
+        # 3. 拦截 Dify
+        elif vendor == 'Dify':
+            client = DifyOpenAIAsync(
+                api_key=request.api_key, 
+                base_url=request.url,
+                http_client=global_http_client
+            )
+        # 4. 兜底走到标准 OpenAI
+        else:
+            client = AsyncOpenAI(
+                api_key=request.api_key, 
+                base_url=request.url,
+                http_client=global_http_client
+            )
+
         model_list = await client.models.list()
-        # 提取模型ID并返回
-        return JSONResponse(content={"data": [model.id for model in model_list.data]})
+        return JSONResponse(content={"data":[model.id for model in model_list.data]})
     except Exception as e:
-        # 处理异常，返回错误信息
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/v1/chat/completions", operation_id="chat_with_agent_party")
