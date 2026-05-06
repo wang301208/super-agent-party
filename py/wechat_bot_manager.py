@@ -473,7 +473,7 @@ class WeChatClient:
             logging.error(f"微信消息处理异常: {e}")
 
     def _clean_text(self, text: str) -> str:
-        text = re.sub(r"!\[.*?\]\(.*?\)", "", text)
+        # text = re.sub(r"!\[.*?\]\(.*?\)", "", text)
         text = re.sub(r'<.*?>', '', text)
         return text.strip()
     
