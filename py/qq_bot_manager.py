@@ -313,7 +313,7 @@ class MyClient(botpy.Client):
         self.memoryList = {}
         self.asyncToolsID = {}
         self.fileLinks = {}
-        self.separators = ['。', '\n', '？', '！']
+        self.separators = []
         self.reasoningVisible = False
         self.quickRestart = True
         self._ready_event = asyncio.Event()
@@ -619,13 +619,23 @@ class MyClient(botpy.Client):
                     await self._send_text_message(message, clean_text)
 
     def _clean_text(self, text):
-        """三级内容清洗"""
-        # 移除图片标记
+        """三级内容清洗（增强版）"""
+        # 1. 移除图片标记: ![alt](url)
         clean = re.sub(r'!\[.*?\]\(.*?\)', '', text)
-        # 移除超链接
+        
+        # 2. 移除超链接: [text](url)
         clean = re.sub(r'\[.*?\]\(.*?\)', '', clean)
-        # 移除纯URL
+        
+        # 3. 移除纯 URL: http/https
         clean = re.sub(r'https?://\S+', '', clean)
+        
+        # 4. 【新增】移除 HTML 标签及变体 (如 <div>, <中文>, <tag attr="1">)
+        # <[^>]+> 的意思是：匹配以 < 开头，后面跟着一个或多个“非 > 字符”，最后以 > 结尾的内容
+        clean = re.sub(r'<[^>]+>', '', clean)
+        
+        # 5. 【可选】处理 HTML 实体转义字符 (如 &nbsp;, &lt;)
+        clean = re.sub(r'&\w+;', '', clean)
+        
         return clean.strip()
 
     

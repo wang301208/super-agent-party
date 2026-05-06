@@ -102,7 +102,7 @@ class FeishuBotManager:
             self.bot_client = FeishuClient()
             self.bot_client.FeishuAgent = config.FeishuAgent
             self.bot_client.memoryLimit = config.memoryLimit
-            self.bot_client.separators = config.separators if config.separators else ['。', '\n', '？', '！']
+            self.bot_client.separators = config.separators if config.separators else []
             self.bot_client.reasoningVisible = config.reasoningVisible
             self.bot_client.quickRestart = config.quickRestart
             self.bot_client.appid = config.appid
@@ -425,7 +425,7 @@ class FeishuClient:
         self.memoryList = {}
         self.asyncToolsID = {}
         self.fileLinks = {}
-        self.separators = ['。', '\n', '？', '！']
+        self.separators = []
         self.reasoningVisible = False
         self.quickRestart = True
         self._is_ready = False

@@ -23,7 +23,7 @@ class SlackBotConfig(BaseModel):
     app_token: str
     llm_model: str = "super-model"
     memory_limit: int = 30
-    separators: List[str] = ["。", "\n", "？", "！"]
+    separators: List[str] = []
     reasoning_visible: bool = True
     quick_restart: bool = True
     enable_tts: bool = False

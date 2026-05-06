@@ -11,7 +11,7 @@ class TelegramClient:
         self.memoryList: Dict[int, List[Dict]] = {}  # chat_id -> messages
         self.asyncToolsID: Dict[int, List[str]] = {}
         self.fileLinks: Dict[int, List[str]] = {}
-        self.separators = ["。", "\n", "？", "！"]
+        self.separators = []
         self.reasoningVisible = False
         self.quickRestart = True
         self.enableTTS = False

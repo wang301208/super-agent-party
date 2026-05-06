@@ -105,7 +105,7 @@ class TelegramBotManager:
                 self.bot_client = TelegramClient()
                 self.bot_client.TelegramAgent = config.TelegramAgent
                 self.bot_client.memoryLimit = config.memoryLimit
-                self.bot_client.separators = config.separators or ["。", "\n", "？", "！"]
+                self.bot_client.separators = config.separators or []
                 self.bot_client.reasoningVisible = config.reasoningVisible
                 self.bot_client.quickRestart = config.quickRestart
                 self.bot_client.enableTTS = config.enableTTS

@@ -158,7 +158,7 @@ class DingtalkClientLogic:
         self.config = config
         self.memoryList = {}
         self.port = get_port()
-        self.separators = config.separators if config.separators else ['。', '\n', '？', '！']
+        self.separators = config.separators if config.separators else []
         
         # --- 新增：注册到行为引擎 ---
         # 告知引擎：dingtalk 平台的执行逻辑由我负责

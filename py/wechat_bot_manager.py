@@ -67,7 +67,7 @@ class StreamInterceptor:
 class WeChatBotConfig(BaseModel):
     WeChatAgent: str = "super-model"
     memoryLimit: int = 30
-    separators: List[str] =['。', '\n', '？', '！']
+    separators: List[str] =[]
     reasoningVisible: bool = False
     quickRestart: bool = True
     enableTTS: bool = False
@@ -218,7 +218,7 @@ class WeChatBotManager:
             self.bot_client = WeChatClient(bot)
             self.bot_client.WeChatAgent = config.WeChatAgent
             self.bot_client.memoryLimit = config.memoryLimit
-            self.bot_client.separators = config.separators if config.separators else ['。', '\n', '？', '！']
+            self.bot_client.separators = config.separators if config.separators else []
             self.bot_client.reasoningVisible = config.reasoningVisible
             self.bot_client.quickRestart = config.quickRestart
             self.bot_client.enableTTS = config.enableTTS
@@ -363,7 +363,7 @@ class WeChatClient:
         self.WeChatAgent = "super-model"
         self.memoryLimit = 10
         self.memoryList = {}
-        self.separators = ['。', '\n', '？', '！']
+        self.separators = []
         self.reasoningVisible = False
         self.quickRestart = True
         self.port = get_port()

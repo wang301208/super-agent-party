@@ -23,7 +23,7 @@ class DiscordBotConfig(BaseModel):
     token: str
     llm_model: str = "super-model"
     memory_limit: int = 10
-    separators: List[str] = ["。", "\n", "？", "！"]
+    separators: List[str] = []
     reasoning_visible: bool = False
     quick_restart: bool = True
     enable_tts: bool = True
