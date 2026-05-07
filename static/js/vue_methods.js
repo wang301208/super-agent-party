@@ -120,10 +120,16 @@ if (window.markdownitContainer) {
     console.warn('markdown-it-container 插件未加载，自定义容器将不会渲染。');
 }
 
-
-// 添加更复杂的临时占位符
-const LATEX_PLACEHOLDER_PREFIX = 'LATEX_PLACEHOLDER_';
-let latexPlaceholderCounter = 0;
+if (window.texmath) {
+    md.use(window.texmath, {
+        engine: window.katex, // 指定渲染引擎为 katex
+        delims: 'dollars',    // 指定使用 $...$ 和 $$...$$ 语法
+        katexOptions: {
+            throwOnError: false,
+            output: 'html'    // 强制输出 HTML，对流式渲染最友好
+        }
+    });
+}
 
 const ALLOWED_EXTENSIONS =[
   // 办公文档
@@ -985,15 +991,6 @@ let vue_methods = {
       this.inAutoMode = false; // 重置自动模式状态
       this.requestScrollToBottom();
       this.sendMessagesToExtension(); // 发送消息到插件
-      this.$nextTick(() => {
-          setTimeout(() => {
-              if (window.MathJax) {
-                  const els = document.querySelectorAll('.stream-content');
-                  window.MathJax.typesetClear([...els]); // 先清除旧渲染
-                  window.MathJax.typesetPromise([...els]).catch(() => {});
-              }
-          }, 200);
-      });
 
       this.autoSaveSettings();
     },
@@ -1200,30 +1197,21 @@ let vue_methods = {
     },
 
 
-    //  使用占位符处理 LaTeX 公式
     formatMessage(content, index) {
       if (!content) return '';
 
-      // 目的是防止 markdown-it 因为最后一行缺少 '|' 而在 Table 和 Paragraph 之间反复横跳
       let processedForRender = content.trimEnd(); 
       
-      // 获取最后一行
       const lines = content.split('\n');
       const lastLine = lines[lines.length - 1].trim();
 
-      // 如果最后一行以 '|' 开头（看起来像是表格行）
-      // 并且它还不是分隔行（即不是 |---| 这种）
-      // 并且它没有以 '|' 结尾
       if (lastLine.startsWith('|') && !lastLine.endsWith('|') && !/^[|\s-:]+$/.test(lastLine)) {
-        // 临时在渲染用的字符串末尾补上 ' |'，让解析器认为这一行结束了
-        // 注意：这不会修改 this.messages 里的真实数据，只影响本次渲染
         processedForRender += ' |';
       }
 
       // --- 预处理阶段 ---
-      const parts = this.splitCodeAndText(content);
-      let latexPlaceholderCounter = 0;
-      const latexPlaceholders = [];
+      // 【修复点】：原代码这里误传了 content，现改为 processedForRender，使上面的表格补全生效
+      const parts = this.splitCodeAndText(processedForRender);
       let inUnclosedCodeBlock = false;
 
       let processedContent = parts.map(part => {
@@ -1236,37 +1224,33 @@ let vue_methods = {
           let formatted = part.content;
 
           // ============================================================
-          // 智能标签过滤：保留合法 HTML，过滤非法自定义标签
+          // 【新增】LaTeX 公式保护机制
+          // 防止公式内部的 < 和 > 被后续的 HTML 标签过滤正则误杀
           // ============================================================
-          
-          // 这个正则会匹配所有的 <标签> 或 </标签>
-          // $1: 是否有 "/" (闭合标签)
-          // $2: 标签名 (TagName)
-          // $3: 标签属性 (Attributes)
-          const anyTagRegex = /<(\/?)([^\s>/>]+)([^>]*)>/g;
+          // 匹配 $$...$$ (支持跨行和流式输出未闭合) 以及 $...$ (行内公式)
+          formatted = formatted.replace(/\$\$([\s\S]*?)(?:\$\$|$)|\$([^\$\n]+)\$/g, function(match) {
+            // 将公式中的 < 替换为 \lt，> 替换为 \gt（KaTeX 支持且非常安全）
+            // 后面加一个空格是为了防止和后面的字母发生粘连（例如误变成 \ltx 导致报错）
+            return match.replace(/</g, '\\lt ').replace(/>/g, '\\gt ');
+          });
 
+          // ============================================================
+          // 智能标签过滤
+          // ============================================================
+          const anyTagRegex = /<(\/?)([^\s>/>]+)([^>]*)>/g;
           formatted = formatted.replace(anyTagRegex, (match, slash, tagName, attrs) => {
             const lowerTagName = tagName.toLowerCase();
-
-            // 1. 必须保留的特殊标签
             if (lowerTagName === 'think') return match;
-
-            // 2. 合法性判断：
-            // 标准 HTML 标签名只允许：英文字母开头，后面跟着字母、数字或中划线
-            // 且不能包含中文字符或特殊符号（如 ·）
             const isStandardHtmlName = /^[a-zA-Z][a-zA-Z0-9-]*$/.test(tagName);
-
             if (isStandardHtmlName) {
-              // 如果是合法标签名（如 div, span, a, br, my-component 等），原样保留
               return match;
             } else {
-              // 如果包含中文（如 <雷电将军>）或特殊符号（如 <Character·A>），则视作非法，过滤掉
               return ''; 
             }
           });
 
           // ============================================================
-          // [原有逻辑] 处理 <think> 标签的 UI 转换
+          // 处理 <think> 标签的 UI 转换
           // ============================================================
           const thinkTagRegexWithClose = /<think>([\s\S]*?)<\/think>/g;
           const thinkTagRegexOpenOnly = /<think>[\s\S]*$/;
@@ -1279,74 +1263,38 @@ let vue_methods = {
               match.replace('<think>', '<div class="highlight-block-reasoning">')
             );
 
-          // [原有逻辑] 处理 LaTeX 公式
-          const latexRegex = /(\$(?:\\.|[^\$\\])*\$)|(\\\[(?:\\.|[^\\])*\\\])/g;
-          return formatted.replace(latexRegex, (match) => {
-            const placeholder = `LATEX_PLACEHOLDER_${latexPlaceholderCounter++}`;
-            latexPlaceholders.push({ placeholder, latex: match });
-            return placeholder;
-          });
+          return formatted;
         }
       }).join('');
 
       let rendered = md.render(processedContent);
-      // --- 恢复阶段 ---
-      // 恢复 LaTeX
-      latexPlaceholders.forEach(({ placeholder, latex }) => {
-        rendered = rendered.replace(placeholder, latex);
-      });
 
-      // 处理未闭合代码块的转义 (如果有)
+      // --- 恢复阶段 ---
       rendered = rendered.replace(/\\\`/g, '`').replace(/\\\$/g, '$');
 
-      // 处理思考中的状态 (Thinking...)
-      const currentMsg = this.messages[index];
-      // 只有当是最后一条消息、角色是助手、且正在输入时才显示“思考中”图标
-      if (index === this.messages.length - 1 && currentMsg?.role === 'assistant' && this.isTyping && currentMsg.content !== currentMsg.pure_content) {
-        // 注意：这里不要直接加在 rendered 字符串里，最好在模板中通过 v-if 控制，
-        // 但为了兼容您的逻辑，我们保留：
+      // 注意增加对 currentMsg 存在的判断
+      const currentMsg = this.messages && index >= 0 ? this.messages[index] : null;
+      if (currentMsg && index === this.messages.length - 1 && currentMsg.role === 'assistant' && this.isTyping && currentMsg.content !== currentMsg.pure_content) {
         rendered = `<div class="thinking-header"><i class="fa-solid fa-lightbulb"></i> ${this.t('thinking')}</div>` + rendered;
       }
 
-      // --- 后处理 (MathJax & Mermaid) ---
-      // 我们不再在 formatMessage 内部直接调用 MathJax，而是将其推入队列
+      // --- 后处理 ---
       this.$nextTick(() => {
-        this.queueMathJax(index);
-        this.initCopyButtons();
-        this.initPreviewButtons();
-        // Mermaid 也可以在这里懒加载
+        if(typeof this.initCopyButtons === 'function') this.initCopyButtons();
+        if(typeof this.initPreviewButtons === 'function') this.initPreviewButtons();
       });
 
-      // 处理链接 (保持您原有的 DOM 操作逻辑，但建议用正则替换以提高性能)
-      // 使用正则替换 href，比创建 DOM 树快得多
       rendered = rendered.replace(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"([^>]*)>/g, (match, href, otherAttrs) => {
-        // 检查是否为脚注
         if (otherAttrs.includes('footnote-ref') || otherAttrs.includes('footnote-backref') || href.startsWith('#')) {
           return match; 
         }
-        const formattedHref = this.formatFileUrl(href);
+        const formattedHref = typeof this.formatFileUrl === 'function' ? this.formatFileUrl(href) : href;
         return `<a href="${formattedHref}" target="_blank"${otherAttrs}>`;
       });
 
       return rendered;
     },
 
-  // 3. MathJax 队列处理 (解决流式输出时的公式闪烁/报错)
-  queueMathJax(index) {
-    // 找到对应的 DOM 元素（假设您在 template 中给了消息容器一个 ID，如 id="msg-content-${index}"）
-    const element = document.getElementById(`message-content-${index}`);
-    if (!element) return;
-
-    // 将渲染任务加入队列
-    this.mathJaxQueue = this.mathJaxQueue.then(() => {
-      if (!window.MathJax) return Promise.resolve();
-      // 使用 typesetPromise 而不是 typeset
-      return window.MathJax.typesetPromise([element]).catch(err => {
-        // 忽略渲染过程中的临时错误（常见于流式传输公式未闭合时）
-        console.debug('MathJax rendering skipped:', err.message);
-      });
-    });
-  },
     formatMessageWrapper(content) {
         // 调用您现有的 formatMessage，这里传 index = -1 避免产生副作用（如 thinking 图标）
         return this.formatMessage(content, -1); 
@@ -3011,15 +2959,6 @@ let vue_methods = {
             }
 
             currentMsg.generationFinished = true;
-
-            this.$nextTick(() => {
-                setTimeout(() => {
-                    if (window.MathJax) {
-                        const els = document.querySelectorAll('.stream-content');
-                        window.MathJax.typesetPromise([...els]).catch(() => { });
-                    }
-                }, 100);
-            });
 
             if (this.ttsSettings.enabled) {
                 if (this.audioStartTime > this.audioCtx.currentTime) {
@@ -10558,18 +10497,36 @@ copySubtitleOverlayEndpoint(){
     }
   },
   async rewrite(index){
-    if (index != 1){
-      // 删除this.messages中从index起之后的所有元素，包括index
-      this.messages.splice(index);
-      this.userInput = this.messages[index-1].pure_content??this.messages[index-1].content;
-      // 删除this.messages中最后一个元素
-      this.messages.pop();
-    }else{
-      // 替换开场白
-      this.randomGreetings();
-    }
+      if (index != 1){
+        // 1. 备份要被重写的用户消息（this.messages[index-1]）
+        const targetMsg = this.messages[index - 1];
 
-    await this.sendMessage();
+        // 2. 删除 index 及其之后的所有消息
+        this.messages.splice(index);
+
+        // 3. 恢复文本内容
+        this.userInput = this.messages[index-1]?.pure_content ?? this.messages[index-1]?.content ?? '';
+
+        // 4. 恢复文件/图片信息（从备份中提取，构造不含 Blob 的对象，避免重复上传）
+        this.files = targetMsg.fileLinks
+          ? targetMsg.fileLinks.map(link => ({ name: link.name, path: link.path }))
+          : [];
+        this.images = targetMsg.imageLinks
+          ? targetMsg.imageLinks.map(link => ({
+              name: link.name,
+              path: link.path,
+              detectedType: link.detectedType   // 保留类型信息
+            }))
+          : [];
+
+        // 5. 删除原用户消息（此时已是数组最后一个元素）
+        this.messages.pop();
+      } else {
+        // 替换开场白
+        this.randomGreetings();
+      }
+
+      await this.sendMessage();
   },
   async updateProxy(){
     await this.autoSaveSettings();

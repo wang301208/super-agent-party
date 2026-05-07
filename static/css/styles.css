@@ -12413,3 +12413,10 @@ pre.sp-content.sp-code {
 .type-reasoning .sp-content * {
     font-size: inherit !important;       /* 所有子元素继承父级字号 */
 }
+
+.katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 10px 0;
+    max-width: 100%;
+}
