@@ -655,8 +655,7 @@ handleAction(item, extraValue) {
 };
 
 const MAX_DISPLAY_LENGTH = 50000;   // 工具结果/错误信息前端显示截断长度
-const MAX_MESSAGES_COUNT = 50;     // 最多保留最近 50 条消息
-const MAX_RENDERED_BLOCKS = 60;
+const MAX_RENDERED_BLOCKS = 30;
 // ==========================================
 // 2. 创建 Vue 应用
 // ==========================================

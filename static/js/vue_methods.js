@@ -3025,19 +3025,6 @@ let vue_methods = {
                 }
             }
 
-            // 清理旧消息，防止 messages 数组无限增长
-            if (this.messages.length > MAX_MESSAGES_COUNT) {
-                const removed = this.messages.splice(0, this.messages.length - MAX_MESSAGES_COUNT);
-                removed.forEach(msg => {
-                    msg.content = '';
-                    msg.pure_content = '';
-                    msg.displayBlocks = [];
-                    msg.backend_content = [];
-                    msg.ttsChunks = [];
-                    msg.audioChunks = [];
-                });
-            }
-
             // 截断后端消息中过长的 tool content，保护 AI 上下文
             if (currentMsg && currentMsg.backend_content) {
                 const AI_MAX_TOOL_LENGTH = 15000;
