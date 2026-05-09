@@ -2626,6 +2626,106 @@ function setupPttInteraction() {
     initPttMainWs();
 }
 
+let isTextInputReady = false;
+function setupTextInteraction() {
+    if (isTextInputReady) return;
+    isTextInputReady = true;
+
+    const textInputContainer = document.createElement('div');
+    textInputContainer.id = 'text-input-container';
+    textInputContainer.style.cssText = `
+        position: fixed;
+        bottom: 20px; /* 错开在橙色 PTT 按钮下方 */
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        display: flex;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(10px);
+        padding: 8px 16px;
+        border-radius: 24px;
+        z-index: 10001;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        width: 80%;
+        max-width: 500px;
+        transition: opacity 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        opacity: 0;
+        pointer-events: none;
+    `;
+
+    const textInputField = document.createElement('input');
+    textInputField.id = 'text-input-field';
+    textInputField.type = 'text';
+    textInputField.placeholder = '输入文字与模型对话...';
+    textInputField.style.cssText = `
+        flex: 1;
+        background: transparent;
+        border: none;
+        color: white;
+        font-size: 15px;
+        outline: none;
+        padding: 8px 4px;
+    `;
+
+    // 隔离事件：防止输入框打字时触发3D场景漫游等快捷键 (如 W, A, S, D, T, R等)
+    ['keydown', 'keyup', 'keypress'].forEach(evt => {
+        textInputField.addEventListener(evt, (e) => {
+            e.stopPropagation();
+            if (evt === 'keydown' && e.key === 'Enter') {
+                e.preventDefault();
+                sendTextInputMessage();
+            }
+        });
+    });
+
+    const textSendBtn = document.createElement('button');
+    textSendBtn.id = 'text-send-btn';
+    textSendBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i>';
+    textSendBtn.style.cssText = `
+        background: #ff6b35;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        margin-left: 8px;
+        transition: transform 0.2s, background 0.2s;
+        outline: none;
+    `;
+    textSendBtn.addEventListener('mouseenter', () => { textSendBtn.style.transform = 'scale(1.1)'; textSendBtn.style.background = '#e65c2b'; });
+    textSendBtn.addEventListener('mouseleave', () => { textSendBtn.style.transform = 'scale(1)'; textSendBtn.style.background = '#ff6b35'; });
+    textSendBtn.addEventListener('click', sendTextInputMessage);
+
+    textInputContainer.appendChild(textInputField);
+    textInputContainer.appendChild(textSendBtn);
+    document.body.appendChild(textInputContainer);
+
+    function sendTextInputMessage() {
+        const text = textInputField.value.trim();
+        if (!text) return;
+        if (pttMainWs && pttMainWs.readyState === WebSocket.OPEN) {
+            // 1. 发送用户输入的文本
+            pttMainWs.send(JSON.stringify({ type: "set_user_input", data: { text: text } }));
+            // 2. 稍微延迟确保主程序录入后，触发对话生成指令
+            setTimeout(() => {
+                pttMainWs.send(JSON.stringify({ type: "trigger_send_message", data: {} }));
+            }, 300);
+            textInputField.value = ''; 
+        } else {
+            console.warn("WS 未连接，尝试重连...");
+            initPttMainWs();
+        }
+    }
+    
+    // 阻止点击面板时触发父级的交互折叠事件等
+    textInputContainer.addEventListener('mousedown', (e) => e.stopPropagation());
+    textInputContainer.addEventListener('touchstart', (e) => e.stopPropagation(), {passive: true});
+}
+
 const btn_width = 28;
 const btn_height = 28;
 
@@ -3514,7 +3614,64 @@ function addcontrolPanel() {
             showTooltip(voiceControlBtn, activeTitle); // 立即更新当前显示的黑色气泡
         });
 
+        // 1. 创建文字控制按钮
+        const textControlBtn = document.createElement('div');
+        textControlBtn.id = 'text-toggle-handle';
+        textControlBtn.innerHTML = '<i class="fas fa-keyboard"></i>'; // 统一使用 fas
+        textControlBtn.style.cssText = `
+            width: ${btn_width}px; height: ${btn_height}px; background: rgba(255,255,255,0.95);
+            border: 2px solid rgba(0,0,0,0.1); border-radius: 50%; color: #333333; cursor: pointer;
+            -webkit-app-region: no-drag; display: flex; align-items: center; justify-content: center;
+            font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform 0.2s;
+            user-select: none; pointer-events: auto; backdrop-filter: blur(10px);
+        `;
 
+        // 补上与其他按钮一致的悬浮动效，防止 Hover 时变色冲突
+        textControlBtn.addEventListener('mouseenter', () => { 
+            textControlBtn.style.background = 'rgba(255,255,255,1)'; 
+            textControlBtn.style.transform = 'scale(1.1)'; 
+            textControlBtn.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)'; 
+        });
+        textControlBtn.addEventListener('mouseleave', () => { 
+            textControlBtn.style.background = 'rgba(255,255,255,0.95)'; 
+            textControlBtn.style.transform = 'scale(1)'; 
+            textControlBtn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; 
+        });
+
+        let textInputVisible = false;
+        (async () => {
+            const initialTitle = await t('EnableTextInput') || '开启文字输入';
+            textControlBtn.title = initialTitle;
+            addHoverEffect(textControlBtn, initialTitle);
+        })();
+
+        bindTapEvent(textControlBtn, async (e) => {
+            textInputVisible = !textInputVisible;
+            const container = document.getElementById('text-input-container');
+            
+            const activeTitle = textInputVisible 
+                ? (await t('DisableTextInput') || '关闭文字输入') 
+                : (await t('EnableTextInput') || '开启文字输入');
+
+            if (textInputVisible) {
+                // 显示输入框，图标变蓝，背景维持白色
+                container.style.opacity = '1';
+                container.style.pointerEvents = 'auto';
+                container.style.transform = 'translateX(-50%) translateY(0)';
+                textControlBtn.style.color = '#007bff'; 
+                setTimeout(() => document.getElementById('text-input-field').focus(), 300);
+            } else {
+                // 隐藏输入框，图标恢复黑灰
+                container.style.opacity = '0';
+                container.style.pointerEvents = 'none';
+                container.style.transform = 'translateX(-50%) translateY(20px)';
+                textControlBtn.style.color = '#333333'; 
+                document.getElementById('text-input-field').blur();
+            }
+
+            textControlBtn.title = activeTitle;
+            showTooltip(textControlBtn, activeTitle);
+        });
 
         // ==========================================
         // ======= 组装所有面板与按钮 ===================
@@ -3527,18 +3684,17 @@ function addcontrolPanel() {
         controlPanel.appendChild(prevModelButton);     // 上一个模型
         controlPanel.appendChild(nextModelButton);     // 下一个模型
         controlPanel.appendChild(subtitleButton);          // 字幕开关
-        if (!isElectron) {
-            controlPanel.appendChild(voiceControlBtn);            // 语音控制
-        }
-        if (isElectron) {
-            controlPanel.appendChild(vmcButton);           // VMC 设置
-        }
+        controlPanel.appendChild(voiceControlBtn);        // 语音控制
+        controlPanel.appendChild(textControlBtn); 
         controlPanel.appendChild(moreButton);          // 🌟 更多按钮
         controlPanel.appendChild(refreshButton);       // 刷新
         controlPanel.appendChild(closeButton);         // 关闭
 
 
         // 2. 组装子面板（收纳次要按钮）
+        if (isElectron) {
+            subPanel.appendChild(vmcButton);           // VMC 设置
+        }
         subPanel.appendChild(idleAnimationButton);     // 闲置动画
         subPanel.appendChild(switchCtrlBtn);           // 第一人称
         subPanel.appendChild(moveModeBtn);             // 物体平移缩放
@@ -3550,11 +3706,12 @@ function addcontrolPanel() {
         
         // 4. 将所有需要被“锁定”操作隐藏的按钮放入数组
         controlButtons.push(
-            dragButton, 
+            dragButton,
             hideButton,
             prevModelButton, 
             nextModelButton, 
             voiceControlBtn,
+            textControlBtn,
             moreButton,          // 让"更多"按钮受锁定控制
             refreshButton, 
             closeButton,
@@ -3612,6 +3769,8 @@ function addcontrolPanel() {
             }
             const vText = pttVisible ? await t('DisableVoiceInput') : await t('EnableVoiceInput');
             addHoverEffect(voiceControlBtn, vText || (pttVisible ? '关闭语音输入' : '开启语音输入'));
+            const tText = textInputVisible ? await t('DisableTextInput') : await t('EnableTextInput');
+            addHoverEffect(textControlBtn, tText || (textInputVisible ? '关闭文字输入' : '开启文字输入'));
         }
         setInterval(updateButtonTooltips, 1000);
 
@@ -3698,6 +3857,44 @@ function addcontrolPanel() {
         
         scheduleHide();
         setupPttInteraction();
+        setupTextInteraction();
+
+        // ======= 【新增】锁定状态下放行底部交互组件的鼠标穿透 =======
+        const pttBtn = document.getElementById('ptt-floating-btn');
+        if (pttBtn) {
+            pttBtn.addEventListener('mouseenter', () => {
+                if (isMouseLocked && window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false);
+            });
+            pttBtn.addEventListener('mouseleave', () => {
+                if (isMouseLocked && window.electronAPI) window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
+            });
+        }
+
+        const textInputContainer = document.getElementById('text-input-container');
+        const textInputField = document.getElementById('text-input-field');
+        if (textInputContainer && textInputField) {
+            textInputContainer.addEventListener('mouseenter', () => {
+                if (isMouseLocked && window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false);
+            });
+            textInputContainer.addEventListener('mouseleave', () => {
+                // 如果鼠标移出且输入框没有聚焦，才恢复鼠标穿透
+                if (isMouseLocked && window.electronAPI && document.activeElement !== textInputField) {
+                    window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
+                }
+            });
+            textInputField.addEventListener('blur', () => {
+                // 输入框失去焦点时，如果鼠标已经不在容器内，恢复穿透
+                if (isMouseLocked && window.electronAPI && !textInputContainer.matches(':hover')) {
+                    window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
+                }
+            });
+            textInputField.addEventListener('focus', () => {
+                // 输入框聚焦时强制取消穿透，防止打字打一半鼠标乱晃导致键盘失焦
+                if (isMouseLocked && window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false);
+            });
+        }
+        // ==============================================================
+
         console.log('控制面板已加载，更多功能折叠完毕。');
 
     }, 1000);

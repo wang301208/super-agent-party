@@ -1698,4 +1698,6 @@ Key3`,
         "pathResetSuccess": "Default path restored. Please restart the application for changes to take effect.",
         "pathResetFailed": "Failed to restore default path",
         "pathChangeNotice": "Notice: If you wish to retain existing data, manually copy files from the original folder to the new path before restarting.",
+        'EnableTextInput': 'Enable Text Input',
+        'DisableTextInput': 'Disable Text Input',
     }

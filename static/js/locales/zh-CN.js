@@ -1701,5 +1701,6 @@ key3`,
         "pathResetSuccess": "已恢复默认路径，请重启应用生效",
         "pathResetFailed": "恢复默认路径失败",
         "pathChangeNotice": "提示：如果您希望保留原有数据，请在重启前手动将原文件夹内的文件复制到新路径中。",
-
+        'EnableTextInput': '启用输入框',
+        'DisableTextInput': '禁用输入框',
     }
