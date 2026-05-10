@@ -904,7 +904,7 @@ app.whenReady().then(async () => {
     //重启应用
     ipcMain.handle('restart-app', () => {
       app.relaunch();
-      app.exit();
+      app.quit();
     })
 
     ipcMain.handle('save-screenshot-direct', async (event, { buffer }) => {
