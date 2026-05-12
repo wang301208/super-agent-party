@@ -2185,14 +2185,15 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                               <!-- 1.3 工具详情视图 (无顶部条，浮动返回按钮) -->
                               <div v-else-if="activeSideView === 'toolDetail'" class="tool-detail-view" style="height: 100%; overflow-y: auto; padding: 48px 16px 16px 16px;">
-                                  
-
+                                
                                   <div v-if="activeToolBlock" style="padding: 8px 0 0 0;">
-                                      <div class="sp-header">
-                                          <i :class="getToolBlockIcon(activeToolBlock.block.type)"></i>
-                                          <span>{{ activeToolBlock.block.name || activeToolBlock.block.type }}</span>
-                                      </div>
-                                      <div class="sp-content" v-morph:format="formatToolBlockContent(activeToolBlock.block)"></div>
+                                    <div class="sap-process-block">
+                                        <div class="sp-header">
+                                            <i :class="getToolBlockIcon(activeToolBlock.block.type)"></i>
+                                            <span>{{ activeToolBlock.block.name || activeToolBlock.block.type }}</span>
+                                        </div>
+                                        <div class="sp-content" v-morph:format="formatToolBlockContent(activeToolBlock.block)"></div>
+                                    </div>
                                   </div>
                                   <el-empty v-else :description="t('noBlockSelected')" style="margin-top: 40px;" />
                               </div>
