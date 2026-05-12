@@ -2627,7 +2627,11 @@ let vue_methods = {
         const getBlock = (type, id = null, name = null) => {
             if (!currentMsg.displayBlocks) currentMsg.displayBlocks = [];
             const blocks = currentMsg.displayBlocks;
-            
+           
+            while (blocks.length > 0 && Object.isFrozen(blocks[0]) && blocks.length >= MAX_RENDERED_BLOCKS) {
+                blocks.shift();
+            }
+
             // 如果有 id，先查找已存在的块（如 tool_call / tool_result 复用）
             if (id) {
                 const existing = blocks.find(b => b.type === type && b.id === id);
@@ -2741,8 +2745,11 @@ let vue_methods = {
                         if (delta.reasoning_content) {
                             const block = getBlock('reasoning');
                             block.content += delta.reasoning_content;
-                            // 不再操作 currentMsg.content
-                            this.requestScrollToBottom();
+                            // 防抖合并到 displayBlocks
+                            if (this._streamUpdateTimer) clearTimeout(this._streamUpdateTimer);
+                            this._streamUpdateTimer = setTimeout(() => {
+                                this.flushStreamTextBuffer();
+                            }, 80);
                         }
 
                         // B. 处理文本 (Content) —— 流式防抖更新
@@ -2816,7 +2823,6 @@ let vue_methods = {
 
                             const b = getBlock('tool_call', toolCallId, progress.name);
                             b.args = accArgs;
-                            // 不再生成 HTML 字符串
                             this.requestScrollToBottom();
                             continue;
                         }
