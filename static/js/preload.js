@@ -1,4 +1,4 @@
-const { contextBridge, shell, ipcRenderer } = require('electron');
+const { contextBridge, shell, ipcRenderer, webFrame } = require('electron');
 const path = require('path');
 const { remote } = require('@electron/remote/main')
 
@@ -64,6 +64,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 路径处理
   pathJoin: (...args) => path.join(...args),
   sendLanguage: (lang) => ipcRenderer.send('set-language', lang),
+  // 全局缩放（字体/界面缩放）
+  setZoomFactor: (factor) => {
+    try { webFrame.setZoomFactor(Number(factor) || 1); } catch (e) { /* noop */ }
+  },
+  getZoomFactor: () => {
+    try { return webFrame.getZoomFactor(); } catch (e) { return 1; }
+  },
   // 环境检测
   isElectron: true,
 

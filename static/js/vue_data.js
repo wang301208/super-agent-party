@@ -528,6 +528,9 @@ let vue_data = {
     systemSettings: {
       language: 'auto',
       theme: 'light',
+      fontScale: 1, // 全局界面缩放比例，1 = 100%，范围 0.85 ~ 1.5
+      codeFontScale: 1, // 代码块独立缩放比例，1 = 100%，范围 0.83 ~ 1.67
+      autoCollapseInput: false, // 聊天输入框未聚焦时是否自动折叠为 1 行 + pill 收纳到发送按钮左侧
       network:"local",
       proxy: 'http://127.0.0.1:7890',
       proxyMode: 'system', //system or manual or none
@@ -1386,6 +1389,10 @@ let vue_data = {
       { id: 'image', icon: 'fa-solid fa-image', title: 'storageImage' },
       { id: 'video', icon: 'fa-solid fa-video', title: 'storageVideo' }
     ],
+    systemTiles: [
+      { id: 'general', icon: 'fa-solid fa-gear', title: 'generalSettings' },
+      { id: 'appearance', icon: 'fa-solid fa-palette', title: 'appearanceSettings' },
+    ],
     defaultSeparators: [
       // 转义字符
       { label: '\\n', value: '\n' },
@@ -1815,6 +1822,7 @@ let vue_data = {
     customHttpTools: [],  // 用于存储自定义HTTP工具的数组
     showCustomHttpToolForm: false,
     isInputExpanded: false,
+    isChatInputActive: false, // 聊天输入框是否处于活跃（聚焦展开）状态，false 时仅显示 1 行并把模型/视图等 pill 折叠到发送按钮左侧
     sidebarVisible: false,
     isMobile: false,
     searchKeyword: '',

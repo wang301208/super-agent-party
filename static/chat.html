@@ -1693,6 +1693,25 @@ function updateElement(el, rawMarkdown, formatFn) {
                         </el-button>
                       </el-tooltip>
 
+                      <!-- 折叠态：仅当"自动折叠输入框"开关打开且当前未聚焦时，把模型 / 视图 pill 收纳到发送按钮左侧 -->
+                      <template v-if="systemSettings.autoCollapseInput && !isChatInputActive && !isCapsuleMode">
+                        <el-tooltip :content="t('clickToSwitchModel')" placement="top" :show-after="500">
+                          <div class="status-pill compact-status-pill" @click.stop="showModelDialog = true">
+                            <i class="fa-solid fa-microchip"></i>
+                            <span class="pill-text">{{ settings?.model !== '' ? settings.model : t('noModelSelected') }}</span>
+                          </div>
+                        </el-tooltip>
+                        <el-tooltip
+                          v-if="!isAssistantMode && !isMobile && currentViewName"
+                          :content="t('clickToSwitchExtensions')"
+                          placement="top"
+                          :show-after="500">
+                          <div class="status-pill compact-status-pill" @click.stop="openExtensionsDialog">
+                            <i class="fa-solid fa-puzzle-piece"></i>
+                            <span class="pill-text">{{ currentViewName }}</span>
+                          </div>
+                        </el-tooltip>
+                      </template>
 
                       <el-tooltip :content="isSending ? t('stopGenerating') : t('sendMessage')" placement="top" class="send-btn-container">
                         <el-button
@@ -1760,9 +1779,11 @@ function updateElement(el, rawMarkdown, formatFn) {
                         v-show="!isPttMode"
                         v-model="userInput"
                         type="textarea"
-                        :rows="isMobile?(isInputExpanded ? 8 : 3):(isInputExpanded ? 16 : 4)"
+                        :rows="(systemSettings.autoCollapseInput && !isChatInputActive) ? 1 : (isMobile ? (isInputExpanded ? 8 : 3) : (isInputExpanded ? 16 : 4))"
                         :placeholder="t('inputMessage')"
                         resize="none"
+                        @focus="onChatInputFocus"
+                        @blur="onChatInputBlur"
                         @keydown="isInputting=true;handleKeyDown($event)" 
                         @keyup="isInputting=false"
                         @paste.native="handleInputPaste"
@@ -1794,7 +1815,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                           </div>
                         </div>
 
-                      <div class="input-status-bar">
+                      <div class="input-status-bar" v-show="!systemSettings.autoCollapseInput || isChatInputActive">
                         
                         <!-- ✨ 2. 语音/键盘切换按钮：始终显示（或者你可以加 v-if="isMobile" 只让手机显示） -->
                         <div class="voice-toggle-btn" @click="isPttMode = !isPttMode" v-if="isMobile">
