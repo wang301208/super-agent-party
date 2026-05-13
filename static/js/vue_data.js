@@ -528,6 +528,8 @@ let vue_data = {
     systemSettings: {
       language: 'auto',
       theme: 'light',
+      fontScale: 1, // 全局界面缩放比例，1 = 100%，范围 0.85 ~ 1.5
+      codeFontScale: 1, // 代码块独立缩放比例，1 = 100%，范围 0.83 ~ 1.67
       network:"local",
       proxy: 'http://127.0.0.1:7890',
       proxyMode: 'system', //system or manual or none
@@ -1385,6 +1387,10 @@ let vue_data = {
       { id: 'text', icon: 'fa-solid fa-file-lines', title: 'storageText' },
       { id: 'image', icon: 'fa-solid fa-image', title: 'storageImage' },
       { id: 'video', icon: 'fa-solid fa-video', title: 'storageVideo' }
+    ],
+    systemTiles: [
+      { id: 'general', icon: 'fa-solid fa-gear', title: 'generalSettings' },
+      { id: 'appearance', icon: 'fa-solid fa-palette', title: 'appearanceSettings' },
     ],
     defaultSeparators: [
       // 转义字符

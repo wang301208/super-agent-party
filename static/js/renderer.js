@@ -853,6 +853,18 @@ const app = Vue.createApp({
       document.addEventListener('click', this._toggleHighlight, false);
     });
     document.documentElement.setAttribute('data-theme', this.systemSettings.theme);
+    // 启动时同步全局缩放与代码块缩放的初始值
+    {
+      const scale = Number(this.systemSettings.fontScale) || 1;
+      if (this.isElectron && window.electronAPI?.setZoomFactor) {
+        try { window.electronAPI.setZoomFactor(scale); } catch (e) { document.documentElement.style.zoom = scale; }
+      } else {
+        document.documentElement.style.zoom = scale;
+      }
+      document.documentElement.style.setProperty('--app-zoom', String(scale));
+      const codeScale = Number(this.systemSettings.codeFontScale) || 1;
+      document.documentElement.style.setProperty('--code-zoom', String(codeScale));
+    }
     
     if (isElectron) {
       window.stopQQBotHandler = this.requestStopQQBotIfRunning;
@@ -1227,6 +1239,25 @@ const app = Vue.createApp({
         if (window.__ELEMENT_PLUS_INSTANCE__) {
           window.__ELEMENT_PLUS_INSTANCE__.config.globalProperties.$ELEMENT.reload();
         }
+      },
+      immediate: true
+    },
+    'systemSettings.fontScale': {
+      handler(newVal) {
+        const safe = Math.max(0.85, Math.min(1.5, Number(newVal) || 1));
+        if (this.isElectron && window.electronAPI?.setZoomFactor) {
+          try { window.electronAPI.setZoomFactor(safe); } catch (e) { document.documentElement.style.zoom = safe; }
+        } else {
+          document.documentElement.style.zoom = safe;
+        }
+        document.documentElement.style.setProperty('--app-zoom', String(safe));
+      },
+      immediate: true
+    },
+    'systemSettings.codeFontScale': {
+      handler(newVal) {
+        const safe = Math.max(0.83, Math.min(1.67, Number(newVal) || 1));
+        document.documentElement.style.setProperty('--code-zoom', String(safe));
       },
       immediate: true
     },
@@ -1840,6 +1871,50 @@ const app = Vue.createApp({
         label: this.t(`theme.${value}`),
         value // 保持原始值（推荐）
       }));
+    },
+    // 全局字体基准 14px
+    currentFontPx() {
+      return Math.round((Number(this.systemSettings.fontScale) || 1) * 14);
+    },
+    // 代码块基准 12px（与 github-markdown.css 中 .markdown-body pre 一致）
+    currentCodeFontPx() {
+      return Math.round((Number(this.systemSettings.codeFontScale) || 1) * 12);
+    },
+    // 下拉框对外暴露 px、对内存 zoom 比例
+    fontPxModel: {
+      get() { return this.currentFontPx; },
+      set(px) { this.handleFontScaleChange(px / 14); }
+    },
+    codeFontPxModel: {
+      get() { return this.currentCodeFontPx; },
+      set(px) { this.handleCodeFontScaleChange(px / 12); }
+    },
+    fontSizeOptions() {
+      return [12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+    },
+    codeFontSizeOptions() {
+      return [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+    },
+    // 外观设置页的代码块预览。DOM 结构必须与 vue_methods.js 中 highlight() 输出一致，
+    // 才能继承 .code-block 上的 zoom / 主题 / 高亮样式。
+    codeBlockPreviewHtml() {
+      const sample =
+`function greet(name) {
+  const message = \`Hello, \${name}!\`;
+  console.log(message);
+  return message;
+}
+
+greet('Super Agent Party');`;
+      const escape = s => s.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c]);
+      try {
+        const highlighted = window.hljs
+          ? window.hljs.highlight(sample, { language: 'javascript' }).value
+          : escape(sample);
+        return `<pre class="code-block"><div class="code-header"><span class="code-lang">javascript</span></div><div class="code-content"><code class="hljs language-javascript">${highlighted}</code></div></pre>`;
+      } catch (e) {
+        return `<pre class="code-block"><div class="code-header"><span class="code-lang">text</span></div><div class="code-content"><code class="hljs">${escape(sample)}</code></div></pre>`;
+      }
     },
     hasAgentChanges() {
       return this.mainAgent !== 'super-model' || 
