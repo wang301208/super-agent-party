@@ -1171,6 +1171,10 @@ let vue_methods = {
         this.activeMenu = 'deploy-bot';
         this.subMenu = 'table_pet'; // 默认显示第一个子菜单
       }
+      else if (key === 'system') {
+        this.activeMenu = 'system';
+        this.subMenu = 'general'; // 默认显示通用设置子页
+      }
       else {
         this.activeMenu = key;
       }
@@ -1956,6 +1960,15 @@ let vue_methods = {
           this.knowledgeBases = data.data.knowledgeBases || this.knowledgeBases;
           this.modelProviders = data.data.modelProviders || this.modelProviders;
           this.systemSettings = data.data.systemSettings || this.systemSettings;
+          if (this.systemSettings && (this.systemSettings.fontScale === undefined || this.systemSettings.fontScale === null)) {
+            this.systemSettings.fontScale = 1;
+          }
+          if (this.systemSettings && (this.systemSettings.codeFontScale === undefined || this.systemSettings.codeFontScale === null)) {
+            this.systemSettings.codeFontScale = 1;
+          }
+          if (this.systemSettings && (this.systemSettings.autoCollapseInput === undefined || this.systemSettings.autoCollapseInput === null)) {
+            this.systemSettings.autoCollapseInput = false;
+          }
           this.showBrowserChat = data.data.showBrowserChat || this.showBrowserChat;
           this.searchEngine = data.data.searchEngine || this.searchEngine;
           if (data.data.largeMoreButtonDict) {
@@ -5138,6 +5151,37 @@ let vue_methods = {
 
       await this.autoSaveSettings();
     },
+    // 全局字体缩放：基准 14px，范围 0.85 ~ 1.5。
+    // Electron 走 webFrame.setZoomFactor 抗锯齿更好；其余环境兜底用 CSS zoom。
+    async handleFontScaleChange(val) {
+      const safe = Math.max(0.85, Math.min(1.5, Number(val) || 1));
+      if (this.isElectron && window.electronAPI?.setZoomFactor) {
+        try {
+          window.electronAPI.setZoomFactor(safe);
+        } catch (e) {
+          document.documentElement.style.zoom = safe;
+        }
+      } else {
+        document.documentElement.style.zoom = safe;
+      }
+      document.documentElement.style.setProperty('--app-zoom', String(safe));
+      this.systemSettings.fontScale = safe;
+      await this.autoSaveSettings();
+    },
+    resetFontScale() {
+      this.handleFontScaleChange(1);
+    },
+    // 代码字体独立缩放：基准 12px（来自 github-markdown.css 的 .markdown-body pre），范围 0.83 ~ 1.67。
+    // 只写 --code-zoom，由 styles.css 中 pre.code-block 的 calc(--code-zoom / --app-zoom) 抵消全局缩放。
+    async handleCodeFontScaleChange(val) {
+      const safe = Math.max(0.83, Math.min(1.67, Number(val) || 1));
+      document.documentElement.style.setProperty('--code-zoom', String(safe));
+      this.systemSettings.codeFontScale = safe;
+      await this.autoSaveSettings();
+    },
+    resetCodeFontScale() {
+      this.handleCodeFontScaleChange(1);
+    },
     async handleNetworkChange(val) {
       this.systemSettings.network = val;
       await window.electronAPI.setNetworkVisibility(val);
@@ -7182,6 +7226,20 @@ handleCreateSlackSeparator(val) {
       },
       toggleInputExpand() {
         this.isInputExpanded = !this.isInputExpanded
+    },
+    onChatInputFocus() {
+      this.isChatInputActive = true;
+    },
+    // textarea 失焦后延迟一帧再判定，给 pill / dialog 的 click 留出落点时间
+    onChatInputBlur() {
+      setTimeout(() => {
+        const active = document.activeElement;
+        const wrappers = document.querySelectorAll('.unified-input-wrapper');
+        for (const w of wrappers) {
+          if (w.contains(active)) return;
+        }
+        this.isChatInputActive = false;
+      }, 200);
     },
     checkMobile() {
       this.isMobile = window.innerWidth <= 768;

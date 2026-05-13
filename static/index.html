@@ -1836,6 +1836,25 @@ function updateElement(el, rawMarkdown, formatFn) {
                         </el-button>
                       </el-tooltip>
 
+                      <!-- 折叠态：仅当"自动折叠输入框"开关打开且当前未聚焦时，把模型 / 视图 pill 收纳到发送按钮左侧 -->
+                      <template v-if="systemSettings.autoCollapseInput && !isChatInputActive && !isCapsuleMode">
+                        <el-tooltip :content="t('clickToSwitchModel')" placement="top" :show-after="500">
+                          <div class="status-pill compact-status-pill" @click.stop="showModelDialog = true">
+                            <i class="fa-solid fa-microchip"></i>
+                            <span class="pill-text">{{ settings?.model !== '' ? settings.model : t('noModelSelected') }}</span>
+                          </div>
+                        </el-tooltip>
+                        <el-tooltip
+                          v-if="!isAssistantMode && !isMobile && currentViewName"
+                          :content="t('clickToSwitchExtensions')"
+                          placement="top"
+                          :show-after="500">
+                          <div class="status-pill compact-status-pill" @click.stop="openExtensionsDialog">
+                            <i class="fa-solid fa-puzzle-piece"></i>
+                            <span class="pill-text">{{ currentViewName }}</span>
+                          </div>
+                        </el-tooltip>
+                      </template>
 
                       <el-tooltip :content="isSending ? t('stopGenerating') : t('sendMessage')" placement="top" class="send-btn-container">
                         <el-button
@@ -1903,9 +1922,11 @@ function updateElement(el, rawMarkdown, formatFn) {
                         v-show="!isPttMode"
                         v-model="userInput"
                         type="textarea"
-                        :rows="isMobile?(isInputExpanded ? 8 : 3):(isInputExpanded ? 16 : 4)"
+                        :rows="(systemSettings.autoCollapseInput && !isChatInputActive) ? 1 : (isMobile ? (isInputExpanded ? 8 : 3) : (isInputExpanded ? 16 : 4))"
                         :placeholder="t('inputMessage')"
                         resize="none"
+                        @focus="onChatInputFocus"
+                        @blur="onChatInputBlur"
                         @keydown="isInputting=true;handleKeyDown($event)" 
                         @keyup="isInputting=false"
                         @paste.native="handleInputPaste"
@@ -1937,7 +1958,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                           </div>
                         </div>
 
-                      <div class="input-status-bar">
+                      <div class="input-status-bar" v-show="!systemSettings.autoCollapseInput || isChatInputActive">
                         
                         <!-- ✨ 2. 语音/键盘切换按钮：始终显示（或者你可以加 v-if="isMobile" 只让手机显示） -->
                         <div class="voice-toggle-btn" @click="isPttMode = !isPttMode" v-if="isMobile">
@@ -12044,213 +12065,331 @@ function updateElement(el, rawMarkdown, formatFn) {
         </div>
         
         <!-- 系统设置页面 -->
-        <div v-show="activeMenu === 'system'" class="page tools-container">
-          <el-form :model="systemSettings" class="settings-form" label-position="top">
-            <div class="tool-item">
-              <div class="tool-header">
-                <span>
-                  <el-icon>
-                    <i class="fa-solid fa-language"></i>
-                  </el-icon>
-                  {{ t('systemLanguage') }}
-                </span>
-              </div>
-              <div class="tool-content">
-                <el-form-item class="form-item-align">
-                  <el-select
-                    v-model="systemSettings.language"
-                    @change="handleSystemLanguageChange"
-                    class="full-width-input">
-                    <el-option
-                      v-for="option in systemlanguageOptions"
-                      :key="option.value"
-                      :label="t(option.label)"
-                      :value="option.value">
-                    </el-option>
-                  </el-select>
-                </el-form-item>
-              </div>
-            </div>
-
-            <div class="tool-item">
-              <div class="tool-header">
-                <span>
-                  <el-icon>
-                    <i class="fa-solid fa-language"></i>
-                  </el-icon>
-                  {{ t('targetLang') }}
-                </span>
-              </div>
-              <div class="tool-content">
-                <el-form-item class="form-item-align">
-                  <el-select
-                    v-model="targetLangSelected"
-                    filterable
-                    allow-create
-                    default-first-option
-                    :placeholder="t('targetLangPlaceholder')"
-                    @change="changeLanguage"
-                  >
-                    <el-option :label="t('systemLanguage')" value="system"></el-option>
-                    <el-option label="简体中文" value="简体中文"></el-option>
-                    <el-option label="繁體中文" value="繁體中文"></el-option>
-                    <el-option label="English" value="English"></el-option>
-                    <el-option label="Français" value="Français"></el-option>
-                    <el-option label="Язык" value="Язык"></el-option>
-                    <el-option label="Deutsch" value="Deutsch"></el-option>
-                    <el-option label="Español" value="Español"></el-option>
-                    <el-option label="Portuguese" value="Portuguese"></el-option>
-                    <el-option label="日本語" value="日本語"></el-option>
-                    <el-option label="한국어" value="한국어"></el-option>
-                  </el-select>
-                </el-form-item>
-              </div>
-            </div>
-
-            <div class="tool-item">
-              <div class="tool-header">
-                <span>
-                  <el-icon>
-                    <i class="fa-solid fa-brush"></i>
-                  </el-icon>
-                  {{ t('themeSettings') }}
-                </span>
-              </div>
-              <div class="tool-content">
-                <el-form-item class="form-item-align">
-                  <el-select
-                    v-model="systemSettings.theme"
-                    @change="handleThemeChange"
-                    class="full-width-input">
-                    <el-option
-                      v-for="option in themeOptions"
-                      :key="option.value"
-                      :label="option.label"
-                      :value="option.value">
-                    </el-option>
-                  </el-select>
-                </el-form-item>
-              </div>
-            </div>
-            
-            <div class="tool-item" v-if="isElectron">
-              <div class="tool-header">
-                <span>
-                  <el-icon>
-                    <i class="fa-solid fa-network-wired"></i>
-                  </el-icon>
-                  {{ t('networkSettings') }}
-                </span>
-              </div>
-              <div class="tool-content">
-                <el-form-item class="form-item-align">
-                  <el-select
-                    v-model="systemSettings.network"
-                    @change="handleNetworkChange"
-                    class="full-width-input">
-                    <el-option
-                      v-for="option in networkOptions"
-                      :key="option.value"
-                      :label="t(option.label)"
-                      :value="option.value">
-                    </el-option>
-                  </el-select>
-                </el-form-item>
-              </div>
-            </div>
-
-            <div class="tool-item">
-              <div class="tool-header">
-                <span>
-                  <el-icon>
-                    <i class="fa-solid fa-wifi"></i>
-                  </el-icon>
-                  {{ t('proxySettings') }}
-                </span>
-              </div>
-              <div class="tool-content">
-
-                <el-form-item :label="t('isChinaProxy')" class="form-item-align" label-position="left">
-                  <el-switch v-model="systemSettings.isChinaProxy"  @change="autoSaveSettings"></el-switch>
-                </el-form-item>
-
-                <el-form-item :label="t('proxyMode')" class="form-item-align">
-                  <el-select v-model="systemSettings.proxyMode" placeholder="Select method" @change="updateProxy">
-                    <el-option :label="t('systemProxy')" value="system"></el-option>
-                    <el-option :label="t('manualProxy')" value="manual"></el-option>
-                    <el-option :label="t('noneProxy')" value="none"></el-option>
-                  </el-select>
-                </el-form-item>
-                <el-form-item class="form-item-align">
-                  <el-input
-                    v-model="systemSettings.proxy"
-                    v-show="systemSettings.proxyMode === 'manual'"
-                    :placeholder="t('proxyPlaceholder')"
-                    class="full-width-input"
-                    @input="updateProxy"
-                  ></el-input>
-                </el-form-item>
-                
-              </div>
-              <el-alert
-                type="info"
-                :closable="false"
-                class="mb-2"
-              >
-                <template #default>
-                  <div class="alert-content">
-                    {{ t('proxyNotice') }}
-                  </div>
-                </template>
-              </el-alert>
-            </div>
-
-            <!-- 数据存储路径设置 -->
-            <div class="tool-item" v-if="!isDocker">
-              <div class="tool-header">
-                <span>
-                  <el-icon><i class="fa-solid fa-folder-tree"></i></el-icon>
-                  {{ t('userDataPath') }}
-                </span>
-              </div>
-              <div class="tool-content">
-                <!-- 第一行：输入框 + 浏览文件夹按钮 -->
-                <el-form-item :label="t('currentPath')" class="form-item-align" label-position="top">
-                  <el-input v-model="customDataPath" :placeholder="t('enterAbsoluteDataPath')" class="full-width-input">
-                    <template #append>
-                      <el-button @click="browseDataDirectory" title="浏览目录">
-                        <i class="fa-solid fa-folder-open"></i>
-                      </el-button>
-                    </template>
-                  </el-input>
-                </el-form-item>
-                
-                <!-- 第二行：操作按钮组 (修改、重置、打开) -->
-                <div class="button-group-row" style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
-                  <el-button type="primary" @click="saveDataPath" style="flex: 1;">
-                    <i class="fa-solid fa-check-circle mr-1"></i> {{ t('applyChange') }}
-                  </el-button>
-                  
-                  <el-button type="warning" plain @click="resetDataPath" style="flex: 1;">
-                    <i class="fa-solid fa-rotate-left mr-1"></i> {{ t('resetDefaultPath') }}
-                  </el-button>
-
-                  <el-button v-if="isElectron" type="info" plain @click="openDataFolder" style="flex: 1;">
-                    <i class="fa-solid fa-external-link-alt mr-1"></i> {{ t('openUserfile') }}
-                  </el-button>
+        <div v-show="activeMenu === 'system'" class="page system-container">
+          <div class="suite-layout">
+            <!-- 左侧二级导航：通用 / 外观 -->
+            <div class="suite-sidebar">
+              <div class="tile-nav">
+                <div
+                  v-for="tile in systemTiles"
+                  :key="tile.id"
+                  class="nav-item"
+                  :class="{ active: subMenu === tile.id }"
+                  @click="subMenu = tile.id">
+                  <el-icon class="nav-icon"><i :class="tile.icon"></i></el-icon>
+                  <span class="nav-text">{{ t(tile.title) }}</span>
                 </div>
               </div>
-
-              <el-alert type="warning" :closable="false" class="mt-2">
-                <template #default>
-                  <div class="alert-content">
-                    {{ t('pathChangeNotice') }}<br>
-                    {{ t('userfileNotice') }}
-                  </div>
-                </template>
-              </el-alert>
             </div>
-          </el-form>
+
+            <!-- 右侧内容区 -->
+            <div class="suite-content">
+
+              <!-- ===== 通用设置子页 ===== -->
+              <div v-show="subMenu === 'general'" class="page tools-container">
+                <el-form :model="systemSettings" class="settings-form" label-position="top">
+                  <div class="tool-item">
+                    <div class="tool-header">
+                      <span>
+                        <el-icon>
+                          <i class="fa-solid fa-language"></i>
+                        </el-icon>
+                        {{ t('systemLanguage') }}
+                      </span>
+                    </div>
+                    <div class="tool-content">
+                      <el-form-item class="form-item-align">
+                        <el-select
+                          v-model="systemSettings.language"
+                          @change="handleSystemLanguageChange"
+                          class="full-width-input">
+                          <el-option
+                            v-for="option in systemlanguageOptions"
+                            :key="option.value"
+                            :label="t(option.label)"
+                            :value="option.value">
+                          </el-option>
+                        </el-select>
+                      </el-form-item>
+                    </div>
+                  </div>
+
+                  <div class="tool-item">
+                    <div class="tool-header">
+                      <span>
+                        <el-icon>
+                          <i class="fa-solid fa-language"></i>
+                        </el-icon>
+                        {{ t('targetLang') }}
+                      </span>
+                    </div>
+                    <div class="tool-content">
+                      <el-form-item class="form-item-align">
+                        <el-select
+                          v-model="targetLangSelected"
+                          filterable
+                          allow-create
+                          default-first-option
+                          :placeholder="t('targetLangPlaceholder')"
+                          @change="changeLanguage"
+                        >
+                          <el-option :label="t('systemLanguage')" value="system"></el-option>
+                          <el-option label="简体中文" value="简体中文"></el-option>
+                          <el-option label="繁體中文" value="繁體中文"></el-option>
+                          <el-option label="English" value="English"></el-option>
+                          <el-option label="Français" value="Français"></el-option>
+                          <el-option label="Язык" value="Язык"></el-option>
+                          <el-option label="Deutsch" value="Deutsch"></el-option>
+                          <el-option label="Español" value="Español"></el-option>
+                          <el-option label="Portuguese" value="Portuguese"></el-option>
+                          <el-option label="日本語" value="日本語"></el-option>
+                          <el-option label="한국어" value="한국어"></el-option>
+                        </el-select>
+                      </el-form-item>
+                    </div>
+                  </div>
+
+                  <div class="tool-item" v-if="isElectron">
+                    <div class="tool-header">
+                      <span>
+                        <el-icon>
+                          <i class="fa-solid fa-network-wired"></i>
+                        </el-icon>
+                        {{ t('networkSettings') }}
+                      </span>
+                    </div>
+                    <div class="tool-content">
+                      <el-form-item class="form-item-align">
+                        <el-select
+                          v-model="systemSettings.network"
+                          @change="handleNetworkChange"
+                          class="full-width-input">
+                          <el-option
+                            v-for="option in networkOptions"
+                            :key="option.value"
+                            :label="t(option.label)"
+                            :value="option.value">
+                          </el-option>
+                        </el-select>
+                      </el-form-item>
+                    </div>
+                  </div>
+
+                  <div class="tool-item">
+                    <div class="tool-header">
+                      <span>
+                        <el-icon>
+                          <i class="fa-solid fa-wifi"></i>
+                        </el-icon>
+                        {{ t('proxySettings') }}
+                      </span>
+                    </div>
+                    <div class="tool-content">
+
+                      <el-form-item :label="t('isChinaProxy')" class="form-item-align" label-position="left">
+                        <el-switch v-model="systemSettings.isChinaProxy"  @change="autoSaveSettings"></el-switch>
+                      </el-form-item>
+
+                      <el-form-item :label="t('proxyMode')" class="form-item-align">
+                        <el-select v-model="systemSettings.proxyMode" placeholder="Select method" @change="updateProxy">
+                          <el-option :label="t('systemProxy')" value="system"></el-option>
+                          <el-option :label="t('manualProxy')" value="manual"></el-option>
+                          <el-option :label="t('noneProxy')" value="none"></el-option>
+                        </el-select>
+                      </el-form-item>
+                      <el-form-item class="form-item-align">
+                        <el-input
+                          v-model="systemSettings.proxy"
+                          v-show="systemSettings.proxyMode === 'manual'"
+                          :placeholder="t('proxyPlaceholder')"
+                          class="full-width-input"
+                          @input="updateProxy"
+                        ></el-input>
+                      </el-form-item>
+
+                    </div>
+                    <el-alert
+                      type="info"
+                      :closable="false"
+                      class="mb-2"
+                    >
+                      <template #default>
+                        <div class="alert-content">
+                          {{ t('proxyNotice') }}
+                        </div>
+                      </template>
+                    </el-alert>
+                  </div>
+
+                  <!-- 数据存储路径设置 -->
+                  <div class="tool-item" v-if="!isDocker">
+                    <div class="tool-header">
+                      <span>
+                        <el-icon><i class="fa-solid fa-folder-tree"></i></el-icon>
+                        {{ t('userDataPath') }}
+                      </span>
+                    </div>
+                    <div class="tool-content">
+                      <el-form-item :label="t('currentPath')" class="form-item-align" label-position="top">
+                        <el-input v-model="customDataPath" :placeholder="t('enterAbsoluteDataPath')" class="full-width-input">
+                          <template #append>
+                            <el-button @click="browseDataDirectory" title="浏览目录">
+                              <i class="fa-solid fa-folder-open"></i>
+                            </el-button>
+                          </template>
+                        </el-input>
+                      </el-form-item>
+
+                      <div class="button-group-row" style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+                        <el-button type="primary" @click="saveDataPath" style="flex: 1;">
+                          <i class="fa-solid fa-check-circle mr-1"></i> {{ t('applyChange') }}
+                        </el-button>
+
+                        <el-button type="warning" plain @click="resetDataPath" style="flex: 1;">
+                          <i class="fa-solid fa-rotate-left mr-1"></i> {{ t('resetDefaultPath') }}
+                        </el-button>
+
+                        <el-button v-if="isElectron" type="info" plain @click="openDataFolder" style="flex: 1;">
+                          <i class="fa-solid fa-external-link-alt mr-1"></i> {{ t('openUserfile') }}
+                        </el-button>
+                      </div>
+                    </div>
+
+                    <el-alert type="warning" :closable="false" class="mt-2">
+                      <template #default>
+                        <div class="alert-content">
+                          {{ t('pathChangeNotice') }}<br>
+                          {{ t('userfileNotice') }}
+                        </div>
+                      </template>
+                    </el-alert>
+                  </div>
+                </el-form>
+              </div>
+
+              <!-- ===== 外观设置子页 ===== -->
+              <div v-show="subMenu === 'appearance'" class="page tools-container">
+                <el-form :model="systemSettings" class="settings-form" label-position="top">
+                  <div class="tool-item">
+                    <div class="tool-header">
+                      <span>
+                        <el-icon>
+                          <i class="fa-solid fa-brush"></i>
+                        </el-icon>
+                        {{ t('themeSettings') }}
+                      </span>
+                    </div>
+                    <div class="tool-content">
+                      <el-form-item class="form-item-align">
+                        <el-select
+                          v-model="systemSettings.theme"
+                          @change="handleThemeChange"
+                          class="full-width-input">
+                          <el-option
+                            v-for="option in themeOptions"
+                            :key="option.value"
+                            :label="option.label"
+                            :value="option.value">
+                          </el-option>
+                        </el-select>
+                      </el-form-item>
+                    </div>
+                  </div>
+
+                  <div class="tool-item">
+                    <div class="tool-header">
+                      <span>
+                        <el-icon>
+                          <i class="fa-solid fa-text-height"></i>
+                        </el-icon>
+                        {{ t('fontSize') }}
+                      </span>
+                    </div>
+                    <div class="tool-content">
+                      <el-form-item class="form-item-align">
+                        <div class="font-size-row">
+                          <el-select
+                            v-model="fontPxModel"
+                            class="font-size-select">
+                            <el-option
+                              v-for="px in fontSizeOptions"
+                              :key="px"
+                              :label="px + ' px'"
+                              :value="px">
+                            </el-option>
+                          </el-select>
+                          <el-button
+                            class="font-size-reset"
+                            :title="t('reset')"
+                            @click.stop="resetFontScale">
+                            <i class="fa-solid fa-rotate-left"></i>
+                          </el-button>
+                        </div>
+                      </el-form-item>
+                    </div>
+                  </div>
+
+                  <!-- 代码字体大小及预览 -->
+                  <div class="tool-item">
+                    <div class="tool-header">
+                      <span>
+                        <el-icon>
+                          <i class="fa-solid fa-code"></i>
+                        </el-icon>
+                        {{ t('codeFontSize') }}
+                      </span>
+                    </div>
+                    <div class="tool-content">
+                      <el-form-item class="form-item-align">
+                        <div class="font-size-row">
+                          <el-select
+                            v-model="codeFontPxModel"
+                            class="font-size-select">
+                            <el-option
+                              v-for="px in codeFontSizeOptions"
+                              :key="px"
+                              :label="px + ' px'"
+                              :value="px">
+                            </el-option>
+                          </el-select>
+                          <el-button
+                            class="font-size-reset"
+                            :title="t('reset')"
+                            @click.stop="resetCodeFontScale">
+                            <i class="fa-solid fa-rotate-left"></i>
+                          </el-button>
+                        </div>
+                      </el-form-item>
+
+                      <div class="appearance-preview-label">{{ t('appearancePreviewText') }}</div>
+                      <div class="appearance-preview-code markdown-body" v-html="codeBlockPreviewHtml"></div>
+                    </div>
+                  </div>
+
+                  <!-- 自动折叠输入框 -->
+                  <div class="tool-item">
+                    <div class="tool-header">
+                      <span>
+                        <el-icon>
+                          <i class="fa-solid fa-compress"></i>
+                        </el-icon>
+                        {{ t('autoCollapseInput') }}
+                      </span>
+                    </div>
+                    <div class="tool-content">
+                      <el-form-item :label="t('autoCollapseInputDesc')" class="form-item-align" label-position="left">
+                        <el-switch
+                          v-model="systemSettings.autoCollapseInput"
+                          @change="autoSaveSettings">
+                        </el-switch>
+                      </el-form-item>
+                    </div>
+                  </div>
+                </el-form>
+              </div>
+
+            </div>
+          </div>
         </div>
         <!--eldialog 询问用户是否立即重启-->
         <el-dialog append-to-body
