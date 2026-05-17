@@ -280,40 +280,38 @@ jobs:
           curl -L https://github.com/indygreg/python-build-standalone/releases/download/20241002/cpython-3.12.7+20241002-x86_64-apple-darwin-install_only.tar.gz -o python-x64.tar.gz
           mkdir -p python-x64
           tar -xzf python-x64.tar.gz -C python-x64
-          sudo ln -sf $(pwd)/python-x64/python/bin/python3 /usr/local/bin/python3-x64
+          
+          # 获取解释器绝对路径 (不再创建软链接，避免破坏路径解析)
+          PYTHON_X64="$(pwd)/python-x64/python/bin/python3"
+          
           # 验证解释器确实是 x86_64
-          arch -x86_64 /usr/local/bin/python3-x64 -c "import platform; print('Python arch:', platform.machine())"
+          arch -x86_64 "$PYTHON_X64" -c "import platform; print('Python arch:', platform.machine())"
 
       - name: Install Python dependencies (x86_64)
         run: |
-          # 1. 给 x86_64 Python 安装 pip / uv（系统级）
-          arch -x86_64 /usr/local/bin/python3-x64 -m pip install --upgrade pip
-          arch -x86_64 /usr/local/bin/python3-x64 -m pip install uv
+          PYTHON_X64="$(pwd)/python-x64/python/bin/python3"
+          
+          # 1. 删除前一阶段(arm64)留下的虚拟环境，防止架构冲突
+          rm -rf .venv
 
-          # 2. 用系统 venv 创建纯 x86_64 虚拟环境
-          arch -x86_64 /usr/local/bin/python3-x64 -m venv venv_x64
+          # 2. 直接使用外部的 uv，指定 x86_64 解释器创建全新的环境并安装依赖
+          # uv 原生构建虚拟环境且不依赖 ensurepip，完美解决之前的报错
+          uv sync --python "$PYTHON_X64"
 
-          # 3. 修复：创建 python3 软链接，确保 uv/shell 能找到
-          ln -sf venv_x64/bin/python3-x64 venv_x64/bin/python3
-
-          # 4. 激活并验证架构
-          source venv_x64/bin/activate
-          echo "=== 虚拟环境 Python 架构 ==="
-          python3 -c "import platform; print(platform.machine())"
-          python3 -c "import platform; assert platform.machine() == 'x86_64', '不是 x86_64！'"
-
-          # 5. 安装项目依赖
-          uv sync
+          # 3. 验证新建虚拟环境的架构
+          .venv/bin/python -c "import platform; print('Virtualenv Python arch:', platform.machine())"
+          .venv/bin/python -c "import platform; assert platform.machine() == 'x86_64', '不是 x86_64！'"
 
       - name: Build Python backend (x86_64)
         run: |
-          source venv_x64/bin/activate
-
-          # 再次确认架构
+          # 注意：前面 arm64 阶段已执行过 uv add pyinstaller 写入了 pyproject.toml，
+          # 因此上一步 uv sync 已经为你安装好了 pyinstaller，可以直接打包
+          
+          # 再次确认执行环境
           echo "=== Build Python arch ==="
-          python -c "import platform; assert platform.machine() == 'x86_64', 'Build Python is not x86_64!'; print('OK')"
+          uv run python -c "import platform; assert platform.machine() == 'x86_64', 'Build Python is not x86_64!'; print('OK')"
 
-          uv add pyinstaller
+          # 运行 PyInstaller
           uv run pyinstaller server.spec
 
           # 验证产出的 server 二进制架构
