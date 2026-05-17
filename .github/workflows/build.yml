@@ -267,48 +267,78 @@ jobs:
       - name: Install Node.js dependencies
         run: npm install
 
-      # 构建 arm64 后端
+      # ========== 构建 arm64 后端 ==========
       - name: Build Python backend (arm64)
         run: |
           uv add pyinstaller
           uv run pyinstaller server.spec
           mv dist/server dist/server_arm64
 
-      # 通过 Rosetta 构建 x86_64 后端
+      # ========== 构建 x86_64 后端 (通过 Rosetta 2) ==========
       - name: Setup x86_64 Python via Rosetta
         run: |
           curl -L https://github.com/indygreg/python-build-standalone/releases/download/20241002/cpython-3.12.7+20241002-x86_64-apple-darwin-install_only.tar.gz -o python-x64.tar.gz
-          mkdir python-x64
+          mkdir -p python-x64
           tar -xzf python-x64.tar.gz -C python-x64
           sudo ln -sf $(pwd)/python-x64/python/bin/python3 /usr/local/bin/python3-x64
-          sudo ln -sf $(pwd)/python-x64/python/bin/pip3 /usr/local/bin/pip3-x64
+          # 验证 Python 解释器架构
+          echo "=== 验证 x86_64 Python 解释器架构 ==="
+          arch -x86_64 /usr/local/bin/python3-x64 -c "import platform; print('Python arch:', platform.machine())"
 
       - name: Install Python dependencies (x86_64)
         run: |
-          arch -x86_64 python3-x64 -m pip install --upgrade pip
-          arch -x86_64 python3-x64 -m pip install uv
-          arch -x86_64 python3-x64 -m uv venv venv_x64 --python python3-x64
+          # ★ 关键：所有命令都用 arch -x86_64 包裹
+          arch -x86_64 /usr/local/bin/python3-x64 -m pip install --upgrade pip
+          arch -x86_64 /usr/local/bin/python3-x64 -m pip install uv
+          
+          # 创建 x86_64 虚拟环境
+          arch -x86_64 /usr/local/bin/python3-x64 -m uv venv venv_x64 --python /usr/local/bin/python3-x64
+          
+          # 激活并验证虚拟环境
           source venv_x64/bin/activate
+          echo "=== 验证虚拟环境 Python 架构 ==="
+          python -c "import platform; print('VENV Python arch:', platform.machine())"
+          
+          # 安装依赖
           uv sync
 
       - name: Build Python backend (x86_64)
         run: |
           source venv_x64/bin/activate
+          
+          # 确保是 x86_64
+          echo "=== 构建前验证架构 ==="
+          python -c "import platform; assert platform.machine() == 'x86_64', 'Error: Not x86_64!'"
+          
           uv add pyinstaller
           uv run pyinstaller server.spec
+          
+          # 验证产物架构
+          echo "=== 验证产物架构 ==="
+          file dist/server/server
+          
           mv dist/server dist/server_x64
 
-      # ★ 合并为 Universal Binary
+      # ========== 合并为 Universal Binary ==========
       - name: Create Universal Python backend
         run: |
+          echo "=== arm64 产物架构 ==="
+          file dist/server_arm64/server
+          
+          echo "=== x86_64 产物架构 ==="
+          file dist/server_x64/server
+          
+          # 合并
           mkdir -p dist/server
-          # 用 lipo 合并 arm64 和 x86_64 的 server 可执行文件
           lipo -create dist/server_arm64/server dist/server_x64/server -output dist/server/server
           chmod +x dist/server/server
-          # 复制其他文件（从 arm64 版本复制，内容都一样的）
-          cp -r dist/server_arm64/* dist/server/ 2>/dev/null || true
-          # 确保可执行文件不被覆盖
-          rm -rf dist/server/server_old 2>/dev/null || true
+          
+          echo "=== Universal 产物架构 ==="
+          file dist/server/server
+          lipo -info dist/server/server
+          
+          # 复制其他文件
+          cp -rn dist/server_arm64/* dist/server/ 2>/dev/null || true
 
       - name: Build and Publish Electron app (macOS Universal)
         shell: bash
