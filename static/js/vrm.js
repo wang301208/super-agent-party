@@ -3448,44 +3448,71 @@ function addcontrolPanel() {
         let xrSession = null;
         let xrRefSpace = null;
         
+        // 确保使用原生的 click 事件
         xrAutoBtn.addEventListener('click', async (e) => {
-            
             if (renderer.xr.isPresenting) {
                 await renderer.xr.getSession().end();
                 return;
             }
 
-            // 自动检测模式
+            // 自动检测模式 (AR 优先)
             const mode = canAR ? 'immersive-ar' : 'immersive-vr';
-            
-            const sessionInit = {
-                optionalFeatures: ['local-floor', 'hit-test', 'dom-overlay'],
-                domOverlay: { root: document.body } 
-            };
+            let session;
 
             try {
-                const session = await navigator.xr.requestSession(mode, sessionInit);
-                renderer.xr.setSession(session);
-                xrSession = session;
-
-                renderer.setAnimationLoop(xrAnimate);
-                
-                document.getElementById('control-panel').style.display = 'none'; 
-                document.getElementById('ptt-floating-btn').classList.add('visible');
-
-                if (currentVrm) {
-                    // 在 VR 中将模型稍微放远一点，否则会“贴脸”
-                    currentVrm.scene.position.set(0, 0, -1.5);
-                }
-
-                session.addEventListener('select', (event) => {
-                    console.log('XR Select triggered');
+                // 尝试 1：带 UI 穿透 (dom-overlay) 和平面检测 (hit-test) 的全功能模式
+                session = await navigator.xr.requestSession(mode, {
+                    optionalFeatures: ['local-floor', 'hit-test', 'dom-overlay'],
+                    domOverlay: { root: document.body } 
                 });
+                console.log("进入 XR：全功能模式");
 
-            } catch (err) {
-                console.error('Failed to start XR session:', err);
-                alert('无法进入 XR 模式: ' + err.message);
+            } catch (err1) {
+                console.warn('全功能 XR 启动失败，尝试降级启动...', err1);
+                try {
+                    // 尝试 2：剥离 dom-overlay (很多安卓浏览器死在 body 作为 root 上)
+                    session = await navigator.xr.requestSession(mode, {
+                        optionalFeatures: ['local-floor', 'hit-test']
+                    });
+                    console.log("进入 XR：无 UI 穿透模式");
+
+                } catch (err2) {
+                    console.warn('降级模式 1 失败，尝试基础模式...', err2);
+                    try {
+                        // 尝试 3：最基础的 XR 模式 (只要手机支持 ARCore/VR 就能开)
+                        session = await navigator.xr.requestSession(mode);
+                        console.log("进入 XR：最基础模式");
+
+                    } catch (err3) {
+                        // 彻底不支持
+                        alert('您的浏览器不支持任何 XR 配置，请尝试使用最新版 Chrome 浏览器。\n报错: ' + err3.message);
+                        return;
+                    }
+                }
             }
+
+            // ========== 成功获取 session 后的处理 ==========
+            renderer.xr.setSession(session);
+            xrSession = session;
+
+            renderer.setAnimationLoop(xrAnimate);
+            
+            // 隐藏控制面板
+            const ctrlPanel = document.getElementById('control-panel');
+            if (ctrlPanel) ctrlPanel.style.display = 'none'; 
+            
+            const pttBtn = document.getElementById('ptt-floating-btn');
+            if (pttBtn) pttBtn.classList.add('visible');
+
+            if (currentVrm) {
+                // 在 VR/AR 中将模型稍微放远一点，避免“贴脸”
+                currentVrm.scene.position.set(0, 0, -1.5);
+            }
+
+            // 处理 XR 手柄或屏幕点击输入
+            session.addEventListener('select', (event) => {
+                console.log('XR 屏幕/手柄点击');
+            });
         });
 
         renderer.xr.addEventListener('sessionend', () => { 
