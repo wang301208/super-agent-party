@@ -3448,7 +3448,8 @@ function addcontrolPanel() {
         let xrSession = null;
         let xrRefSpace = null;
         
-        bindTapEvent(xrAutoBtn, async (e) => {
+        xrAutoBtn.addEventListener('click', async (e) => {
+            
             if (renderer.xr.isPresenting) {
                 await renderer.xr.getSession().end();
                 return;
@@ -3457,7 +3458,6 @@ function addcontrolPanel() {
             // 自动检测模式
             const mode = canAR ? 'immersive-ar' : 'immersive-vr';
             
-            // 关键点：指定 UI 容器，而不是整个 body，这样交互更精准
             const sessionInit = {
                 optionalFeatures: ['local-floor', 'hit-test', 'dom-overlay'],
                 domOverlay: { root: document.body } 
@@ -3478,16 +3478,16 @@ function addcontrolPanel() {
                     currentVrm.scene.position.set(0, 0, -1.5);
                 }
 
-                // 处理 XR 输入（点击控制器触发点击 UI）
                 session.addEventListener('select', (event) => {
                     console.log('XR Select triggered');
                 });
 
-            } catch (e) {
-                console.error('Failed to start XR session:', e);
-                alert('无法进入 XR 模式: ' + e.message);
+            } catch (err) {
+                console.error('Failed to start XR session:', err);
+                alert('无法进入 XR 模式: ' + err.message);
             }
         });
+
         renderer.xr.addEventListener('sessionend', () => { 
             renderer.setAnimationLoop(null); 
             animate(); 
