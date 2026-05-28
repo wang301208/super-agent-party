@@ -990,8 +990,64 @@ function updateElement(el, rawMarkdown, formatFn) {
                   :class="{ collapsed: !chatAreaOpen }" 
                   v-show="chatAreaOpen">
                 <div class="messages-container" ref="messagesContainer" v-if="!isCapsuleMode" @click.capture="handleMessageLinkClick">
+                 
+                  <!-- ✨✨✨ 初始状态中央模式切换器 (含自适应标题与手机端优化) ✨✨✨ -->
+                  <div v-if="messages.length === 0 || (messages.length === 1 && messages[0].role === 'system')" class="initial-mode-switcher-container">
+                    
+                    <!-- 动态标题部分 (对齐参考图中的海豚/雷电图标与提示语) -->
+                    <div class="switcher-header">
+                      <i :class="{
+                        'fa-solid fa-bolt': systemSettings.chatMode === 'standard',
+                        'fa-solid fa-face-smile': systemSettings.chatMode === 'entertainment',
+                        'fa-solid fa-gem': systemSettings.chatMode === 'work'
+                      }"></i>
+                      <span>{{ t('use') + " " }}{{ 
+                        systemSettings.chatMode === 'standard' ? (t('chatUIStandard') || '经典模式') : 
+                        systemSettings.chatMode === 'entertainment' ? (t('chatUIEntertainment') || '娱乐模式') : 
+                        (t('chatUIWork') || '办公模式') 
+                      }}{{" " + t('startConversation') }}</span>
+                    </div>
+
+                    <div class="mode-segmented-control">
+                    
+
+                      <!-- 2. 娱乐模式 -->
+                      <div 
+                        class="segment-option" 
+                        :class="{ active: systemSettings.chatMode === 'entertainment' }"
+                        @click="systemSettings.chatMode = 'entertainment'; autoSaveSettings()"
+                      >
+                        <i class="fa-solid fa-face-smile"></i>
+                        <span>{{ t('chatUIEntertainment') || '娱乐模式' }}</span>
+                      </div>
+
+                      <!-- 1. 经典模式 (原标准模式) -->
+                      <div 
+                        class="segment-option" 
+                        :class="{ active: systemSettings.chatMode === 'standard' }"
+                        @click="systemSettings.chatMode = 'standard'; autoSaveSettings()"
+                      >
+                        <i class="fa-solid fa-bolt"></i>
+                        <span>{{ t('chatUIStandard') || '经典模式' }}</span>
+                      </div>
+
+                      <!-- 3. 办公模式 -->
+                      <div 
+                        class="segment-option" 
+                        :class="{ active: systemSettings.chatMode === 'work' }"
+                        @click="systemSettings.chatMode = 'work'; autoSaveSettings()"
+                      >
+                        <i class="fa-solid fa-gem"></i>
+                        <span>{{ t('chatUIWork') || '办公模式' }}</span>
+                      </div>
+
+                    </div>
+                  </div>
+                 
                   <!-- 添加 is-group-mode 类 -->
-                  <div v-for="(message, index) in messages" :key="index" class="message" :class="[message.role, { 'is-group-mode': isGroupMode }]">
+                  <div v-for="(message, index) in messages" :key="index" class="message" 
+                    :class="[message.role, { 'is-group-mode': isGroupMode }]"
+                    v-show="!(message.role === 'system' && systemSettings.chatMode === 'entertainment')">
                     
                     <!-- 群聊模式 - AI 头像 (左侧) -->
                     <div v-if="isGroupMode && message.role === 'assistant' && message.agentName" class="im-avatar left">
@@ -1041,9 +1097,15 @@ function updateElement(el, rawMarkdown, formatFn) {
                       </div>
 
                       <!-- 消息气泡主体 -->
-                      <div class="message-content" v-if="!allBriefly||message.role !== 'system'||index === 0" :class="{ typing: message.role === 'assistant' && isTyping && index === messages.length - 1 }">
+                      <div class="message-content" 
+                          v-if="!allBriefly||message.role !== 'system'||index === 0" 
+                          :class="{ 
+                              typing: message.role === 'assistant' && isTyping && index === messages.length - 1,
+                              'mode-entertainment': (message.role === 'assistant' || message.role === 'system') && systemSettings.chatMode === 'entertainment',
+                              'mode-work': (message.role === 'assistant' || message.role === 'system') && systemSettings.chatMode === 'work'
+                          }">
                         
-                        <!-- User 消息主体 -->
+                        <!-- User 消息主体 (保持不变) -->
                         <div v-if="message.role === 'user'" class="user-content" data-mjx-disabled="true">
                             <div v-html="message.content" class="user-msg"></div>
 
@@ -1051,25 +1113,20 @@ function updateElement(el, rawMarkdown, formatFn) {
                             <div class="message-attachments-display user-msg-attachments" 
                                 v-if="message.fileLinks?.length || message.imageLinks?.length">
                               
-
                                 <!-- 1. 视频/图片附件 -->
                                 <div v-for="(img, imgIdx) in message.imageLinks" :key="'img-'+imgIdx" 
                                     :class="['attachment-item-display', img.type === 'video' ? 'video-item-wrapper' : 'image-item-wrapper']">
-                                    
                                     <div class="preview-media-box">
                                         <template v-if="img.type === 'video'">
-                                            <!-- 视频预览 -->
                                             <video :src="formatFileUrl(img.path)" preload="metadata" controls></video>
                                         </template>
-                                        
                                         <template v-else>
-                                            <!-- 图片预览 -->
                                             <img :src="formatFileUrl(img.path)" />
                                         </template>
                                     </div>
                                 </div>
 
-                                <!-- 3. 文件附件 (反色版) -->
+                                <!-- 3. 文件附件 -->
                                 <div v-for="(file, fileIdx) in message.fileLinks" :key="'file-'+fileIdx" class="attachment-item-display file-item">
                                     <div class="file-card-box">
                                         <div class="file-icon"><i class="fa-solid fa-file-lines"></i></div>
@@ -1081,8 +1138,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             </div>
                         </div>
 
-                        
-                        <!-- Assistant -->
+                        <!-- Assistant 消息主体 -->
                         <div v-else-if="message.role === 'assistant'" class="markdown-body">
                             <div v-if="message.briefly" v-html="formatMessage(message.pure_content??message.content, index)"></div>
                             
@@ -1090,70 +1146,79 @@ function updateElement(el, rawMarkdown, formatFn) {
                             <div v-else-if="message.displayBlocks && message.displayBlocks.length > 0" class="message-blocks-container">
                                 <template v-for="(block, bIndex) in getVisibleBlocks(message)" :key="'blk-'+bIndex">
                                     
-                                    <!-- 如果是最后一个块且消息未完成，或者不是工具类块，正常渲染 -->
-                                    <template v-if="(message.displayBlocks.length > 0 && block === message.displayBlocks[message.displayBlocks.length - 1] && !message.generationFinished) || !isToolBlock(block)">
-                                        <!-- 这里保留你原来的所有类型的完整渲染代码 -->
-                                        <!-- 1. 深度思考块 -->
-                                        <div v-if="block.type === 'reasoning'" class="sap-process-block type-reasoning">
-                                            <div class="sp-header"><i class="fa-solid fa-brain"></i> {{ t('thinking') }}</div>
-                                            <div class="sp-content" v-morph:format="block.content"></div>
-                                        </div>
+                                    <!-- 🚀 模式拦截器：娱乐模式下，仅放行 text 和 approval，彻底屏蔽思考与工具过程 -->
+                                    <template v-if="!(systemSettings.chatMode === 'entertainment' && block.type !== 'text' && block.type !== 'approval')">
+                                        
+                                        <!-- 如果是最后一个块且消息未完成，或者不是工具类块，正常渲染 -->
+                                        <template v-if="(message.displayBlocks.length > 0 && block === message.displayBlocks[message.displayBlocks.length - 1] && !message.generationFinished) || !isToolBlock(block)">
+                                            
+                                            <!-- 1. 深度思考块 -->
+                                            <div v-if="block.type === 'reasoning'" class="sap-process-block type-reasoning">
+                                                <div class="sp-header"><i class="fa-solid fa-brain"></i> {{ t('thinking') }}</div>
+                                                <div class="sp-content" v-morph:format="block.content"></div>
+                                            </div>
 
-                                        <!-- 文本块 -->
-                                        <div v-else-if="block.type === 'text'" class="a2ui-text-wrapper">
-                                            <template v-for="(segment, sIdx) in splitMessageContent(block.content)" :key="sIdx">
-                                                <div v-if="segment.type === 'text'" v-morph:format="segment.content" style="display: inline-block; width: 100%;"></div>
-                                                <a2-u-i-renderer v-else-if="segment.type === 'ui'" :config="segment.content" @action="handleA2UIAction"></a2-u-i-renderer>
-                                            </template>
-                                        </div>
+                                            <!-- 文本块 -->
+                                            <div v-else-if="block.type === 'text'" class="a2ui-text-wrapper">
+                                                <template v-for="(segment, sIdx) in splitMessageContent(block.content)" :key="sIdx">
+                                                    <div v-if="segment.type === 'text'" class="stream-content" :class="{ 'streaming': isTyping && index === messages.length - 1 && sIdx === splitMessageContent(block.content).length - 1 }" v-morph:format="segment.content" style="display: inline-block; width: 100%;"></div>
+                                                    <a2-u-i-renderer v-else-if="segment.type === 'ui'" :config="segment.content" @action="handleA2UIAction"></a2-u-i-renderer>
+                                                </template>
+                                            </div>
 
-                                        <!-- 工具调用 -->
-                                        <div v-else-if="block.type === 'tool_call'" class="sap-process-block type-call" :id="'tool-call-'+block.id">
-                                            <div class="sp-header"><i class="fa-solid fa-wrench"></i> {{ t('call') }} <span>{{ block.name }}</span></div>
-                                            <pre class="sp-content sp-code">{{ block.args ? block.args.replace(/\\n/g, '\n').replace(/\\"/g, '"') : '' }}</pre>
-                                        </div>
+                                            <!-- 工具调用 -->
+                                            <div v-else-if="block.type === 'tool_call'" class="sap-process-block type-call" :id="'tool-call-'+block.id">
+                                                <div class="sp-header"><i class="fa-solid fa-wrench"></i> {{ t('call') }} <span>{{ block.name }}</span></div>
+                                                <pre class="sp-content sp-code">{{ block.args ? block.args.replace(/\\n/g, '\n').replace(/\\"/g, '"') : '' }}</pre>
+                                            </div>
 
-                                        <!-- 工具结果 -->
-                                        <div v-else-if="block.type === 'tool_result'" class="sap-process-block type-result">
-                                            <div class="sp-header"><i class="fa-solid fa-check"></i> {{ block.name }}</div>
-                                            <pre class="sp-content sp-code">{{ block.content ? (typeof block.content === 'string' ? block.content.replace(/\\n/g, '\n').replace(/\\"/g, '"') : block.content) : '' }}</pre>
-                                        </div>
+                                            <!-- 工具结果 -->
+                                            <div v-else-if="block.type === 'tool_result'" class="sap-process-block type-result">
+                                                <div class="sp-header"><i class="fa-solid fa-check"></i> {{ block.name }}</div>
+                                                <pre class="sp-content sp-code">{{ block.content ? (typeof block.content === 'string' ? block.content.replace(/\\n/g, '\n').replace(/\\"/g, '"') : block.content) : '' }}</pre>
+                                            </div>
 
-                                        <!-- 审批 -->
-                                        <div v-else-if="block.type === 'approval'" class="sap-process-block type-approval" :id="'approval-'+block.id">
-                                            <div class="sp-header"><i class="fa-solid fa-lock"></i> {{ t('permissionRequest') }} · {{ block.data.permission_mode }}</div>
-                                            <div class="sp-content">
-                                                <div class="sp-text">{{ t('AIwantsToExecute') }}: <span>{{ block.data.tool_name }}</span></div>
-                                                <pre class="sp-code-box">{{ JSON.stringify(block.data.tool_params, null, 2) }}</pre>
-                                                <div class="sp-actions">
-                                                    <button @click="processToolApproval(block.id, 'deny')" class="sp-btn ghost">{{ t('Deny') }}</button>
-                                                    <button @click="processToolApproval(block.id, 'always')" class="sp-btn outline">{{ t('AllowAlways') }}</button>
-                                                    <button @click="processToolApproval(block.id, 'once')" class="sp-btn primary">{{ t('AllowOnce') }}</button>
+                                            <!-- 审批 -->
+                                            <div v-else-if="block.type === 'approval'" class="sap-process-block type-approval" :id="'approval-'+block.id">
+                                                <div class="sp-header"><i class="fa-solid fa-lock"></i> {{ t('permissionRequest') }} · {{ block.data.permission_mode }}</div>
+                                                <div class="sp-content">
+                                                    <div class="sp-text">{{ t('AIwantsToExecute') }}: <span>{{ block.data.tool_name }}</span></div>
+                                                    <pre class="sp-code-box">{{ JSON.stringify(block.data.tool_params, null, 2) }}</pre>
+                                                    <div class="sp-actions">
+                                                        <button @click="processToolApproval(block.id, 'deny')" class="sp-btn ghost">{{ t('Deny') }}</button>
+                                                        <button @click="processToolApproval(block.id, 'always')" class="sp-btn outline">{{ t('AllowAlways') }}</button>
+                                                        <button @click="processToolApproval(block.id, 'once')" class="sp-btn primary">{{ t('AllowOnce') }}</button>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
 
-                                        <!-- 错误 -->
-                                        <div v-else-if="block.type === 'error'" class="sap-process-block type-error" :id="'tool-error-'+block.id">
-                                            <div class="sp-header"><i class="fa-solid fa-xmark"></i> {{ block.name }}</div>
-                                            <pre class="sp-content sp-code">{{ block.content ? (typeof block.content === 'string' ? block.content.replace(/\\n/g, '\n').replace(/\\"/g, '"') : block.content) : '' }}</pre>
+                                            <!-- 错误 -->
+                                            <div v-else-if="block.type === 'error'" class="sap-process-block type-error" :id="'tool-error-'+block.id">
+                                                <div class="sp-header"><i class="fa-solid fa-xmark"></i> {{ block.name }}</div>
+                                                <pre class="sp-content sp-code">{{ block.content ? (typeof block.content === 'string' ? block.content.replace(/\\n/g, '\n').replace(/\\"/g, '"') : block.content) : '' }}</pre>
+                                            </div>
+                                        </template>
+
+                                        <!-- 否则（其他已完成工具块）折叠为占位行，只显示标题 -->
+                                        <div v-else class="sap-process-block collapsed-tool-block" @click="openToolBlockDetail(message, block)">
+                                            <div class="sp-header">
+                                                <i v-if="block.type === 'tool_call'" class="fa-solid fa-wrench"></i>
+                                                <i v-else-if="block.type === 'tool_result'" class="fa-solid fa-check"></i>
+                                                <i v-else class="fa-solid fa-brain"></i>
+                                                <span>{{ block.name || block.type }}</span>
+                                            </div>
                                         </div>
                                     </template>
-
-                                    <!-- 否则（其他已完成工具块）折叠为占位行，只显示标题 -->
-                                     <div v-else class="sap-process-block collapsed-tool-block" @click="openToolBlockDetail(message, block)">
-                                        <div class="sp-header">
-                                            <i v-if="block.type === 'tool_call'" class="fa-solid fa-wrench"></i>
-                                            <i v-else-if="block.type === 'tool_result'" class="fa-solid fa-check"></i>
-                                            <i v-else class="fa-solid fa-brain"></i>
-                                            <span>{{ block.name || block.type }}</span>
-                                        </div>
-                                    </div>
                                 </template>
-                                <div v-if="isTyping && index === messages.length - 1 && (message.displayBlocks?.length || 0) === 0"><i class="fa-solid fa-spinner fa-spin"></i></div>
+                                <div v-if="isTyping && index === messages.length - 1 && (
+                                    (message.displayBlocks?.length || 0) === 0 || 
+                                    (systemSettings.chatMode === 'entertainment' && !message.displayBlocks.some(b => b.type === 'text' || b.type === 'approval'))
+                                )">
+                                    <i class="fa-solid fa-spinner fa-spin"></i>
+                                </div>
                             </div>
 
-                            <!-- === 旧架构兼容：让以前从本地存储读取的历史对话依然能显示 === -->
+                            <!-- === 旧架构兼容 === -->
                             <div v-else>
                                 <template v-for="(segment, segIndex) in splitMessageContent(message.content)" :key="segIndex">
                                     <div v-if="segment.type === 'text'" class="stream-content" :class="{ 'streaming': isTyping && index === messages.length - 1 && segIndex === splitMessageContent(message.content).length - 1 }" v-morph:format="segment.content" style="display: inline-block; width: 100%;"></div>
@@ -1163,7 +1228,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             </div>
                         </div>
                         
-                        <!-- System -->
+                        <!-- System 消息主体 (完全不变) -->
                         <div v-else class="system-content" data-mjx-disabled="true">
                           <div v-html="index===0 ? (t('system_prompt') + message.content):message.content" class="scroll-on-hover" @click="openEditDialog(message.role, message.content,index)" :style="{ 'max-height': index===0 ? '200px' : 'none', 'overflow-y': index===0 ? 'auto' : 'hidden' }"></div>
                         </div>
@@ -1521,7 +1586,6 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                       <el-tooltip :content="t('CLItool')" placement="top">
                         <el-button
-                          :disabled="!isElectron"
                           @click="CLISettings.enabled = !CLISettings.enabled; handleEnableToggle(CLISettings.enabled)"
                           class="icon-btn web-search-btn"
                           :type="CLISettings.enabled ? 'primary' : 'default'"
