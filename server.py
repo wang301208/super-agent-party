@@ -2978,25 +2978,18 @@ def get_tcs(m):
 # =========================================================================
 
 def ensure_thinking_fields(messages):
-    """
-    为所有 assistant 消息强制添加 reasoning_content: ""（空字符串）
-    """
+    """为所有 assistant 消息确保 reasoning_content 字段存在（缺失则补空字符串），但不覆盖已有值。"""
     if not messages:
         return messages
-    
     for msg in messages:
         role = get_role(msg)
-        
         if role == "assistant":
-            # 处理字典格式
             if isinstance(msg, dict):
-                # 强制设置为空字符串
-                msg["reasoning_content"] = ""
-            
-            # 处理对象格式
+                if "reasoning_content" not in msg:
+                    msg["reasoning_content"] = ""
             else:
-                setattr(msg, "reasoning_content", "")
-    
+                if not hasattr(msg, "reasoning_content"):
+                    setattr(msg, "reasoning_content", "")
     return messages
 
 def sanitize_tool_calls(messages: list) -> list:
@@ -4266,6 +4259,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
 
                 tool_calls = []
                 full_content = ""
+                assistant_reasoning_content = "" 
                 search_not_done = False
                 search_task = ""
                 is_tool_call = False
@@ -4321,10 +4315,12 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         
                         # 优先处理 reasoning_content
                         if delta["reasoning_content"]:
+                            assistant_reasoning_content += delta["reasoning_content"]  # 新增
                             yield f"data: {json.dumps(chunk_dict)}\n\n"
                             continue
                         if delta.get("reasoning", ""):
                             delta["reasoning_content"] = delta["reasoning"]
+                            assistant_reasoning_content += delta["reasoning_content"]  # 新增
                             yield f"data: {json.dumps(chunk_dict)}\n\n"
                             continue
 
@@ -4360,6 +4356,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         new_content = "".join(content_buffer)
                         new_reasoning = "".join(reasoning_buffer)
                         
+                        assistant_reasoning_content += new_reasoning  # 新增
+
                         # 更新chunk内容
                         delta["content"] = new_content.strip("\x00")  # 保留未完成内容
                         delta["reasoning_content"] = new_reasoning.strip("\x00") or None
@@ -4386,7 +4384,12 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                     full_content += final_chunk["choices"][0]["delta"].get("content", "")
                 if not tool_calls:
                     # 将响应添加到消息列表
-                    content_append(request.messages, 'assistant', full_content)
+                    request.messages.append({
+                        "role": "assistant",
+                        "content": full_content,
+                        "reasoning_content": assistant_reasoning_content
+                    })
+                    assistant_reasoning_content = ""  # 重置
                 # 工具和深度搜索
                 if tool_calls:
                     print("tool_calls",tool_calls)
@@ -4452,9 +4455,11 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             {
                                 "role": "assistant",
                                 "content": full_content,
-                                "reasoning_content": "",
+                                "reasoning_content": assistant_reasoning_content,
                             }
                         )
+                        assistant_reasoning_content = ""  # 本轮思考已归档
+                        full_content = "" 
                         request.messages.append(
                             {
                                 "role": "user",
@@ -4488,14 +4493,13 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             {
                                 "role": "assistant",
                                 "content": full_content,
-                                "reasoning_content": "",
+                                "reasoning_content": assistant_reasoning_content,
                             }
                         )
                         request.messages.append(
                             {
                                 "role": "user",
                                 "content": drs_msg,
-                                "reasoning_content": "",
                             }
                         )
                     elif response_content["status"] == "need_more_work":
@@ -4515,9 +4519,11 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             {
                                 "role": "assistant",
                                 "content": full_content,
-                                "reasoning_content": "",
+                                "reasoning_content": assistant_reasoning_content,
                             }
                         )
+                        assistant_reasoning_content = ""  # 本轮思考已归档
+                        full_content = "" 
                         request.messages.append(
                             {
                                 "role": "user",
@@ -4540,14 +4546,15 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             {
                                 "role": "assistant",
                                 "content": full_content,
-                                "reasoning_content": "",
+                                "reasoning_content": assistant_reasoning_content,
                             }
                         )
+                        assistant_reasoning_content = ""  # 本轮思考已归档
+                        full_content = "" 
                         request.messages.append(
                             {
                                 "role": "user",
                                 "content": drs_msg,
-                                "reasoning_content": "",
                             }
                         )
 
@@ -4559,9 +4566,10 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         assistant_tool_calls_msg = {
                             "role": "assistant",
                             "content": "",
-                            "reasoning_content": "",
+                            "reasoning_content": assistant_reasoning_content,
                             "tool_calls": []
                         }
+                        assistant_reasoning_content = ""  # 重置，本轮思考已存入
                         assistant_tool_calls_str =[]
                         
                         for tc in tool_calls:
@@ -5097,10 +5105,12 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
 
                                 # 优先处理 reasoning_content
                                 if delta["reasoning_content"]:
+                                    assistant_reasoning_content += delta["reasoning_content"]  # 新增
                                     yield f"data: {json.dumps(chunk_dict)}\n\n"
                                     continue
                                 if delta.get("reasoning", ""):
                                     delta["reasoning_content"] = delta["reasoning"]
+                                    assistant_reasoning_content += delta["reasoning_content"]  # 新增
                                     yield f"data: {json.dumps(chunk_dict)}\n\n"
                                     continue
                                 # 处理内容
@@ -5134,6 +5144,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 # 构造新的delta内容
                                 new_content = "".join(content_buffer)
                                 new_reasoning = "".join(reasoning_buffer)
+
+                                assistant_reasoning_content += new_reasoning
                                 
                                 # 更新chunk内容
                                 delta["content"] = new_content.strip("\x00")  # 保留未完成内容
@@ -5162,7 +5174,12 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         full_content += final_chunk["choices"][0]["delta"].get("content", "")
                     if not tool_calls:
                         # 将响应添加到消息列表
-                        content_append(request.messages, 'assistant', full_content)
+                        request.messages.append({
+                            "role": "assistant",
+                            "content": full_content,
+                            "reasoning_content": assistant_reasoning_content
+                        })
+                        assistant_reasoning_content = ""  # 重置
                     # 工具和深度搜索
                     if tool_calls:
                         pass
@@ -5229,9 +5246,11 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 {
                                     "role": "assistant",
                                     "content": full_content,
-                                    "reasoning_content": "",
+                                    "reasoning_content": assistant_reasoning_content,
                                 }
                             )
+                            assistant_reasoning_content = ""  # 本轮思考已归档
+                            full_content = "" 
                             request.messages.append(
                                 {
                                     "role": "user",
@@ -5265,9 +5284,11 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 {
                                     "role": "assistant",
                                     "content": full_content,
-                                    "reasoning_content": "",
+                                    "reasoning_content": assistant_reasoning_content,
                                 }
                             )
+                            assistant_reasoning_content = ""  # 本轮思考已归档
+                            full_content = "" 
                             request.messages.append(
                                 {
                                     "role": "user",
@@ -5291,9 +5312,11 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 {
                                     "role": "assistant",
                                     "content": full_content,
-                                    "reasoning_content": "",
+                                    "reasoning_content": assistant_reasoning_content,
                                 }
                             )
+                            assistant_reasoning_content = ""  # 本轮思考已归档
+                            full_content = "" 
                             request.messages.append(
                                 {
                                     "role": "user",
@@ -5316,9 +5339,11 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 {
                                     "role": "assistant",
                                     "content": full_content,
-                                    "reasoning_content": "",
+                                    "reasoning_content": assistant_reasoning_content,
                                 }
                             )
+                            assistant_reasoning_content = ""  # 本轮思考已归档
+                            full_content = "" 
                             request.messages.append(
                                 {
                                     "role": "user",

@@ -2759,6 +2759,14 @@ let vue_methods = {
                         if (delta.reasoning_content) {
                             const block = getBlock('reasoning');
                             block.content += delta.reasoning_content;
+
+                            let lastBackend = currentMsg.backend_content[currentMsg.backend_content.length - 1];
+                            // 如果最后一个条目不是 assistant，或者它已经有了内容（说明上一个 assistant 已完成）
+                            if (!lastBackend || lastBackend.role !== 'assistant' || (lastBackend.content && lastBackend.content.trim() !== '')) {
+                                lastBackend = { role: 'assistant', content: '', reasoning_content: '' };
+                                currentMsg.backend_content.push(lastBackend);
+                            }
+                            lastBackend.reasoning_content = (lastBackend.reasoning_content || '') + delta.reasoning_content;
                             // 防抖合并到 displayBlocks
                             if (this._streamUpdateTimer) clearTimeout(this._streamUpdateTimer);
                             this._streamUpdateTimer = setTimeout(() => {
