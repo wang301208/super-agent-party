@@ -17163,7 +17163,7 @@ function updateElement(el, rawMarkdown, formatFn) {
             <!-- 聊天区域复用 -->
             <div class="chat-area" style="min-width: 450px; flex: 1; display: flex; flex-direction: column; overflow: hidden; height: 100%; width: 100%; background: transparent;">
                 
-                <div class="messages-container" ref="messagesContainer" v-if="!isCapsuleMode" @click.capture="handleMessageLinkClick">
+                <div class="messages-container" ref="browserMessagesContainer" v-if="!isCapsuleMode" @click.capture="handleMessageLinkClick">
                  
                   <!-- ✨✨✨ 初始状态中央模式切换器 (含自适应标题与手机端优化) ✨✨✨ -->
                   <div v-if="messages.length === 0 || (messages.length === 1 && messages[0].role === 'system')" class="initial-mode-switcher-container">
