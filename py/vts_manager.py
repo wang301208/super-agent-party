@@ -38,6 +38,8 @@ class VTSManager:
         self.rms_threshold = 15000.0  
         self.smooth_factor = 0.45     
 
+        self.triggered_tags_in_session = set()
+
     @property
     def current_active_expressions(self):
         return [e['name'] for e in self.model_expressions if e.get('active')]
@@ -89,7 +91,16 @@ class VTSManager:
 
     async def trigger_hotkey(self, tag_name):
         if not self.authenticated: return
-        clean_name = tag_name.replace('<', '').replace('>', '').strip().lower()
+        
+        clean_name = tag_name.replace('<', '').replace('>', '') \
+                             .replace('[', '').replace(']', '') \
+                             .replace('(', '').replace(')', '') \
+                             .replace('*', '').strip().lower()
+        
+        if clean_name in self.triggered_tags_in_session:
+            return
+        self.triggered_tags_in_session.add(clean_name)
+
         target_exp = None
         for exp in self.model_expressions:
             if exp['name'].strip().lower() == clean_name:

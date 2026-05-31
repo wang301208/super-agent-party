@@ -2510,6 +2510,11 @@ let vue_methods = {
     // 2. AI 生成与流式处理函数（支持 Human-in-the-loop 审批）
     // ==========================================
     async generateAIResponse(targetAgentId, agentDisplayName = null, isResume = false) {
+
+        if (!isResume && !this.ttsSettings.enabled && (this.vrmOnline || this.vtsOnline) && this.ttsWebSocket) {
+            this.sendTTSStatusToVRM('ttsStarted', {});
+        }
+
         this.startTimer();
         this.voiceStack = ['default'];
         let tts_buffer = '';
@@ -2788,7 +2793,7 @@ let vue_methods = {
                             // 缓冲文本，不再直接操作 DOM
                             this._streamTextBuffer += delta.content;
 
-                            // 【核心修复】：将文本同步存入 backend_content，防止多轮对话历史被过滤抛弃
+                            // 将文本同步存入 backend_content，防止多轮对话历史被过滤抛弃
                             const lastBackend = currentMsg.backend_content[currentMsg.backend_content.length - 1];
                             if (lastBackend && lastBackend.role === 'assistant') {
                                 lastBackend.content = (lastBackend.content || '') + delta.content;
@@ -2796,19 +2801,43 @@ let vue_methods = {
                                 currentMsg.backend_content.push({ role: 'assistant', content: delta.content });
                             }
 
-                            // 为 TTS 即时处理
-                            const parts = delta.content.split('```');
-                            for (let i = 0; i < parts.length; i++) {
-                                if (!isCodeBlock) { tts_buffer += parts[i]; }
-                                if (i < parts.length - 1) { isCodeBlock = !isCodeBlock; }
+                            const accumulatedText = lastBackend ? (lastBackend.content || '') : '';
+
+                            // === 核心分支处理 ===
+                            if (this.ttsSettings.enabled) {
+                                // 为 TTS 即时处理 (保留原音频切片和口型同步)
+                                const parts = delta.content.split('```');
+                                for (let i = 0; i < parts.length; i++) {
+                                    if (!isCodeBlock) { tts_buffer += parts[i]; }
+                                    if (i < parts.length - 1) { isCodeBlock = !isCodeBlock; }
+                                }
+                                const { chunks, chunks_voice, remaining, remaining_voice } = this.splitTTSBuffer(tts_buffer);
+                                if (chunks.length > 0) {
+                                    currentMsg.chunks_voice.push(...chunks_voice);
+                                    currentMsg.ttsChunks.push(...chunks);
+                                }
+                                tts_buffer = remaining;
+                                this.cur_voice = remaining_voice;
+                            } else {
+                                // === 【新增】TTS 禁用状态下的文本与表情同步逻辑 ===
+                                if ((this.vrmOnline || this.vtsOnline) && this.ttsWebSocket) {
+                                    // 自动检测并提取累积文本中的表情/动作指令 tags (例如 [happy] 或 *wave*)
+                                    const detectedExpressions = [];
+                                    const tagRegex = /[\[\(\*]([a-zA-Z_0-9\u4e00-\u9fa5]+)[\]\)\*]/g;
+                                    let match;
+                                    
+                                    while ((match = tagRegex.exec(accumulatedText)) !== null) {
+                                        const tag = match[1].toLowerCase().trim();
+                                        detectedExpressions.push(tag);
+                                    }
+
+                                    // 将累计文本和动作标记推送给 VRM 渲染
+                                    this.sendTTSStatusToVRM('omniStreaming', {
+                                        text: accumulatedText,
+                                        expressions: detectedExpressions
+                                    });
+                                }
                             }
-                            const { chunks, chunks_voice, remaining, remaining_voice } = this.splitTTSBuffer(tts_buffer);
-                            if (chunks.length > 0) {
-                                currentMsg.chunks_voice.push(...chunks_voice);
-                                currentMsg.ttsChunks.push(...chunks);
-                            }
-                            tts_buffer = remaining;
-                            this.cur_voice = remaining_voice;
 
                             // 防抖合并到 displayBlocks
                             if (this._streamUpdateTimer) clearTimeout(this._streamUpdateTimer);
@@ -3093,7 +3122,13 @@ let vue_methods = {
 
             if (this.ttsSettings.enabled && audioProcess) {
                 await audioProcess;
+            } else {
+                // === 【新增】TTS 禁用状态下生成完毕通知 ===
+                if ((this.vrmOnline || this.vtsOnline) && this.ttsWebSocket) {
+                    this.sendTTSStatusToVRM('allChunksCompleted', {});
+                }
             }
+
 
             this.isThinkOpen = false;
             shouldSyncGroupMemory = !!currentMsg?.pure_content?.trim();

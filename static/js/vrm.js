@@ -4006,23 +4006,18 @@ function initTTSWebSocket() {
             const audioDataBytes = new Uint8Array(buffer, 4 + jsonLen);
 
             if (metadata.type === 'omni_chunk') {
-                // ======= 【复用你的逻辑】 =======
                 isOmniMode = true;
                 isAudioStreaming = true;
                 if (metadata.text) fullTargetText = metadata.text;
                 
-                // 将原始字节转为 Base64 喂给你的 processOmniStreaming
                 const b64 = btoa(String.fromCharCode.apply(null, audioDataBytes));
                 processOmniStreaming({
                     audioData: b64,
                     sampleRate: metadata.sampleRate
                 });
                 
-                // 启动你的打字机
                 startTypewriterLoop();
-                // ===============================
             } else if (metadata.type === 'audio_chunk') {
-                // 标准 TTS 排序逻辑
                 const audioUrl = URL.createObjectURL(new Blob([audioDataBytes], { type: metadata.mimeType }));
                 addToVrmSortBuffer({
                     audioDataUrl: audioUrl, chunkIndex: metadata.chunkIndex,
@@ -4033,8 +4028,12 @@ function initTTSWebSocket() {
             // 处理指令 (JSON)
             try {
                 const message = JSON.parse(event.data);
+                // 确保两个指令处理函数均被执行
                 handleVrmCoreLogic(message);
-            } catch (e) {}
+                handleTTSMessage(message); 
+            } catch (e) {
+                console.error("解析 JSON 失败: ", e);
+            }
         }
     };
     ttsWebSocket.onclose = () => { wsConnected = false; setTimeout(initTTSWebSocket, 3000); };
@@ -4228,24 +4227,17 @@ function handleTTSMessage(message) {
 
     switch (type) {
         case 'ttsStarted':
-            // 建议：在这里也调用一次 haltCurrentAudio() 以防万一，
-            // 但如果这里是同步调用，可能会导致上一句结尾被切断太快。
-            // 只要 stopSpeaking 处理得当，这里重置变量即可。
             isOmniMode = false;
             fullTargetText = "";
             currentVisibleCount = 0;
             displayStartIndex = 0;
             isAudioStreaming = false;
             omniNextStartTime = 0;
-            omniTotalAudioDuration = 0;  // 重置
-            omniPlaybackStartTime = 0;   // 重置
-            // 确保如果有旧的打字机在跑，立即停止
+            omniTotalAudioDuration = 0;
+            omniPlaybackStartTime = 0;
             stopTypewriterLoop();
             stopAllChunkAnimations();
             clearSubtitle();
-            
-            // 如果希望极其保险，防止上一句尾音残留，取消下面这行的注释：
-            // haltCurrentAudio(); 
             break;
 
         case 'omniStreaming':
@@ -4260,15 +4252,41 @@ function handleTTSMessage(message) {
                 }
 
                 isOmniMode = true;
-                isAudioStreaming = true; // 标记正在接收流
+                isAudioStreaming = true; // 标记正在接收数据流
                 if (data.text) fullTargetText = data.text;
+                
+                // 纯文本模式下的表情与动作触发
+                if (data.expressions && data.expressions.length > 0) {
+                    const ALLOW_EXPS = ['surprised','happy','angry','sad','neutral','relaxed','blink','blinkLeft','blinkRight'];
+                    if (idleAnimationManager) {
+                        const foundMotionId = data.expressions.find(exp => motionUrlMap.has(exp));
+                        if (foundMotionId) {
+                            const motionUrl = motionUrlMap.get(foundMotionId);
+                            if (motionUrl) {
+                                console.log(`[OmniTextOnly] 触发动作: ${foundMotionId}`);
+                                idleAnimationManager.playOneShotAnimation(motionUrl);
+                            }
+                        }
+                    }
+                    const hitExpression = data.expressions.find(e => ALLOW_EXPS.includes(e));
+                    if (hitExpression && currentVrm && currentVrm.expressionManager) {
+                        const EMOTIONS = ['surprised', 'happy', 'angry', 'sad', 'neutral', 'relaxed'];
+                        if (EMOTIONS.includes(hitExpression)) {
+                            EMOTIONS.forEach(exp => {
+                                currentVrm.expressionManager.setValue(exp, exp === hitExpression ? 1.0 : 0.0);
+                            });
+                        } else {
+                            currentVrm.expressionManager.setValue(hitExpression, 1.0);
+                        }
+                    }
+                }
+
                 if (data.audioData) processOmniStreaming(data);
                 startTypewriterLoop();
             }
             break;
 
         case 'startSpeaking':
-            // 传统 TTS 逻辑
             if (windowName === 'default' || windowName === data.voice) {
                 isOmniMode = false;
                 startLipSyncForChunk(data); 
@@ -4278,41 +4296,22 @@ function handleTTSMessage(message) {
             }
             break;
 
-        // ==========================================
-        // 修改点 1: 强制打断 (用户停止或新对话开始前)
-        // ==========================================
         case 'stopSpeaking':
+            // 强行打断：直接清除状态，不留痕迹
             isOmniMode = false;
             isAudioStreaming = false;
-            displayStartIndex = 0;
-            
-            // 1. 停止打字机
             stopTypewriterLoop();
-            
-            // 2. 【核心修复】强制销毁音频上下文，立即静音
-            // 不加这一步，浏览器缓冲区里已调度的音频还会继续播放几秒
             haltCurrentAudio(); 
-
-            // 3. 清理 UI
             finalizeSpeech(true); 
             break;
 
-        // ==========================================
-        // 修改点 2: 流传输结束 (自然播放结束)
-        // ==========================================
         case 'allChunksCompleted':
-            // 标记流已结束，不再接收新数据
-            isOmniMode = false; 
+            // 核心修改：仅标记 AI 数据输入结束。打字机自会负责完整打印完毕。
             isAudioStreaming = false; 
             
-            // 注意：这里不要调用 haltCurrentAudio()，
-            // 否则句子最后几秒的语音会被切断（因为音频播放通常滞后于数据接收）。
-            // 音频的自然结束交给 AudioContext 自己跑完，或者等待下一次 ttsStarted/stopSpeaking 清理。
-            
-            // 如果文字已经打完，触发收尾；
-            // 如果文字没打完，打字机循环通过 isAudioStreaming=false 判断会进入加速收尾模式，
-            // 跑完所有字后会自动调用 finalizeSpeech(false)。
+            // 如果此时字幕已经提前打印完成了，直接收尾
             if (currentVisibleCount >= fullTargetText.length) {
+                isOmniMode = false;
                 finalizeSpeech(false);
             }
             break;
@@ -4332,9 +4331,81 @@ function handleTTSMessage(message) {
  * 完整改进版打字机循环
  * 支持：动态语速、半页重叠翻页、标点符号安全分割、视觉反馈
  */
+// 提取出的字幕渲染与滚动复用辅助函数
+function updateSubtitleAndRoll() {
+    const currentDisplayLength = currentVisibleCount - displayStartIndex;
+    if (currentDisplayLength > MAX_WINDOW_SIZE) {
+        let targetStartIndex = currentVisibleCount - OVERLAP_SIZE;
+        const lookbackRange = Math.floor(MAX_WINDOW_SIZE * 0.6); 
+        const searchText = fullTargetText.slice(currentVisibleCount - lookbackRange, currentVisibleCount);
+        let lastPuncIndex = -1;
+        for (let i = searchText.length - 1; i >= 0; i--) {
+            if (SAFE_PUNC_LIST.test(searchText[i])) {
+                lastPuncIndex = i;
+                break;
+            }
+        }
+        if (lastPuncIndex !== -1) {
+            const foundIndex = (currentVisibleCount - lookbackRange) + lastPuncIndex + 1;
+            const newOverlap = currentVisibleCount - foundIndex;
+            if (newOverlap >= 5 && newOverlap <= MAX_WINDOW_SIZE * 0.8) {
+                targetStartIndex = foundIndex;
+            }
+        }
+        displayStartIndex = targetStartIndex;
+    }
+
+    const displayText = fullTargetText.slice(displayStartIndex, currentVisibleCount);
+    const prefix = displayStartIndex > 0 ? "..." : "";
+    renderSubtitleUI(prefix + displayText);
+}
+
+// 兼容“无音频纯文本驱动”的自适应打字机循环
 function startTypewriterLoop() {
     if (typewriterTimer) return; // 防止重复启动
 
+    // 检测当前是否处于纯文本模式（无音频输出或未启动音频节点）
+    const isTextOnlyMode = !currentAudioContext || !chunkAnimations.has('omni_live_stream');
+
+    if (isTextOnlyMode) {
+        let lastUpdateTime = performance.now();
+        const CHARS_PER_SECOND = 8; // 降低语速：调整为每秒 8 个中文字符，阅读体验更自然舒适
+
+        function typeTextOnly() {
+            // 如果外部调用了强行打断（如 stopSpeaking），则立即退出
+            if (!isOmniMode) {
+                typewriterTimer = null;
+                return;
+            }
+
+            const now = performance.now();
+            const elapsed = now - lastUpdateTime;
+            const interval = 1000 / CHARS_PER_SECOND;
+            
+            if (elapsed >= interval) {
+                // 平滑、逐字递增地打字，绝不跳字或闪烁
+                if (currentVisibleCount < fullTargetText.length) {
+                    currentVisibleCount++;
+                    updateSubtitleAndRoll();
+                }
+                // 扣除余数，确保打字间隔时间高精度均匀
+                lastUpdateTime = now - (elapsed % interval);
+            }
+
+            // 只有当所有文字均已完整打出，且 AI 流已完全停止时，才安全关闭打字机并收尾
+            if (currentVisibleCount >= fullTargetText.length && !isAudioStreaming) {
+                typewriterTimer = null;
+                isOmniMode = false; // 打印彻底结束，释放状态
+                finalizeSpeech(false);
+            } else {
+                typewriterTimer = requestAnimationFrame(typeTextOnly);
+            }
+        }
+        typewriterTimer = requestAnimationFrame(typeTextOnly);
+        return;
+    }
+
+    // 标准音频同步打字逻辑 (原版逻辑)
     function syncTextToAudio() {
         if (!isOmniMode || !currentAudioContext) {
             typewriterTimer = null;
@@ -4345,63 +4416,26 @@ function startTypewriterLoop() {
         const totalChars = fullTargetText.length;
 
         if (totalChars > 0 && omniTotalAudioDuration > 0) {
-            // 计算当前音频播放了多长时间
             const playedTime = Math.max(0, now - omniPlaybackStartTime);
-            
-            // 计算播放进度比例 (稍微给文本一点提前量，乘以1.05感觉更贴脸)
             let progress = (playedTime / omniTotalAudioDuration) * 1.05; 
-            progress = Math.min(1.0, progress); // 最高 100%
+            progress = Math.min(1.0, progress); 
 
-            // 如果音频流还在传输，限制进度不能超过当前文本的最大长度
-            // 如果音频断流结束了（!isAudioStreaming），则允许跑满
             let targetCharCount = Math.floor(progress * totalChars);
 
-            // 如果已经接收完毕，但还有音频没播完，正常按照比例走
-            // 如果音频播完了（now > omniNextStartTime），直接显示全部
             if (!isAudioStreaming && now >= omniNextStartTime) {
                 targetCharCount = totalChars;
             }
 
-            // 平滑递增，不能倒退
             if (targetCharCount > currentVisibleCount) {
                 currentVisibleCount = targetCharCount;
-                
-                // --- 你的智能翻页逻辑 (完全保留) ---
-                const currentDisplayLength = currentVisibleCount - displayStartIndex;
-                if (currentDisplayLength > MAX_WINDOW_SIZE) {
-                    let targetStartIndex = currentVisibleCount - OVERLAP_SIZE;
-                    const lookbackRange = Math.floor(MAX_WINDOW_SIZE * 0.6); 
-                    const searchText = fullTargetText.slice(currentVisibleCount - lookbackRange, currentVisibleCount);
-                    let lastPuncIndex = -1;
-                    for (let i = searchText.length - 1; i >= 0; i--) {
-                        if (SAFE_PUNC_LIST.test(searchText[i])) {
-                            lastPuncIndex = i;
-                            break;
-                        }
-                    }
-                    if (lastPuncIndex !== -1) {
-                        const foundIndex = (currentVisibleCount - lookbackRange) + lastPuncIndex + 1;
-                        const newOverlap = currentVisibleCount - foundIndex;
-                        if (newOverlap >= 5 && newOverlap <= MAX_WINDOW_SIZE * 0.8) {
-                            targetStartIndex = foundIndex;
-                        }
-                    }
-                    displayStartIndex = targetStartIndex;
-                }
-
-                // --- 渲染 ---
-                const displayText = fullTargetText.slice(displayStartIndex, currentVisibleCount);
-                const prefix = displayStartIndex > 0 ? "..." : "";
-                renderSubtitleUI(prefix + displayText);
+                updateSubtitleAndRoll();
             }
         }
 
-        // 判断是否结束
         if (!isOmniMode || (!isAudioStreaming && currentVisibleCount >= totalChars)) {
             typewriterTimer = null;
             if (!isOmniMode) finalizeSpeech(false);
         } else {
-            // 使用 requestAnimationFrame 帧同步，性能远高于 setTimeout
             typewriterTimer = requestAnimationFrame(syncTextToAudio);
         }
     }

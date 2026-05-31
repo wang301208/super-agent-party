@@ -8285,35 +8285,25 @@ async def tts_websocket_endpoint(websocket: WebSocket):
                         
                         if vts_instance.is_running and len(audio_file_bytes) > 0:
                             import subprocess
-                            import imageio_ffmpeg  # 神器：自带免安装版 ffmpeg
-                            # ================= 终极解码方案 =================
+                            import imageio_ffmpeg  
                             def decode_audio_to_pcm(b_data):
-                                # 获取 imageio_ffmpeg 自带的免安装 ffmpeg 路径
                                 ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-                                
-                                # 使用极速底层管道：输入任意格式字节流，输出 16-bit 24000Hz 单声道 PCM
                                 process = subprocess.Popen([
                                     ffmpeg_exe,
-                                    '-i', 'pipe:0',       # 从标准输入读取 (就是我们的 b_data)
-                                    '-f', 's16le',        # 强制输出格式：16-bit signed little-endian PCM
-                                    '-ar', '24000',       # 强制采样率：24000Hz
-                                    '-ac', '1',           # 强制单声道
-                                    'pipe:1'              # 输出到标准输出
+                                    '-i', 'pipe:0',       
+                                    '-f', 's16le',        
+                                    '-ar', '24000',       
+                                    '-ac', '1',           
+                                    'pipe:1'              
                                 ], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-                                
                                 pcm_raw_bytes, _ = process.communicate(input=b_data)
                                 return pcm_raw_bytes
-                            # ===============================================
 
-                            # 异步线程执行，绝对不卡主线程
                             pcm_raw_bytes = await asyncio.to_thread(decode_audio_to_pcm, audio_file_bytes)
-                            
                             if pcm_raw_bytes:
                                 asyncio.create_task(vts_instance.drive_mouth(pcm_raw_bytes))
                         
-                        # 转发给前端VRM
                         await tts_manager.broadcast_to_vrm(data_bytes)
-                        
                     except Exception as e:
                         logging.error(f"万能音频解码出错: {e}")
             
@@ -8323,11 +8313,13 @@ async def tts_websocket_endpoint(websocket: WebSocket):
                     payload = json.loads(msg["text"]) 
                     msg_type = payload.get("type")
                     
+                    # === 【新增】在每次语音会话重新开始时，清空 VTS 的历史防抖标记集 ===
+                    if msg_type in ["ttsStarted", "startSpeaking"]:
+                        if hasattr(vts_instance, "triggered_tags_in_session"):
+                            vts_instance.triggered_tags_in_session.clear()
+                    
                     if msg_type == "startVTS_Driver":
-                        # 1. 获取连接结果
                         success = await vts_instance.connect(payload.get("data", {}))
-                        
-                        # 2. 将结果反馈给前端
                         feedback = {
                             "type": "vts_connection_status",
                             "data": {
@@ -8339,7 +8331,6 @@ async def tts_websocket_endpoint(websocket: WebSocket):
                         
                     elif msg_type == "stopVTS_Driver":
                         await vts_instance.stop()
-                        # 停止也可以发一个反馈
                         await websocket.send_text(json.dumps({
                             "type": "vts_connection_status",
                             "data": {"success": False, "message": "VTS Disconnected"}
@@ -8348,6 +8339,14 @@ async def tts_websocket_endpoint(websocket: WebSocket):
                         if vts_instance.is_running:
                             data_content = payload.get("data", {})
                             expressions = data_content.get("expressions",[])
+                            for exp in expressions:
+                                asyncio.create_task(vts_instance.trigger_hotkey(exp))
+
+                    # === 【新增】TTS 禁用时，流式文本(omniStreaming)携带的动作表情触发支持 ===
+                    elif msg_type == "omniStreaming":
+                        if vts_instance.is_running:
+                            data_content = payload.get("data", {})
+                            expressions = data_content.get("expressions", [])
                             for exp in expressions:
                                 asyncio.create_task(vts_instance.trigger_hotkey(exp))
 
