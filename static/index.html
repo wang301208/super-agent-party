@@ -339,17 +339,30 @@ function updateElement(el, rawMarkdown, formatFn) {
             <i class="fa-solid fa-school"></i>
           </el-icon>
         </el-button>
-      <!-- 添加移动端菜单按钮 -->
-      <el-button 
-      class="top-bar-btn"
-       v-if="isMobile" 
-       @click="isCollapse = sidebarVisible;sidebarVisible = !sidebarVisible"
-       text
-       :title="isCollapse ? t('expandAside') : t('collapseAside')">
-          <el-icon>
-            <i :class="!sidebarVisible ? 'fa-solid fa-bars' : 'fa-solid fa-bars-staggered'"></i>
-          </el-icon>
-      </el-button>
+        <!-- ★ 移动端：展示Aside控制按钮 & 新增扩展栏弹出按钮 ★ -->
+        <template v-if="isMobile">
+          <!-- 移动端 Aside 导航折叠按钮 -->
+          <el-button 
+            class="top-bar-btn"
+            @click="isCollapse = sidebarVisible; sidebarVisible = !sidebarVisible"
+            text
+            :title="isCollapse ? t('expandAside') : t('collapseAside')">
+            <el-icon>
+              <i :class="!sidebarVisible ? 'fa-solid fa-bars' : 'fa-solid fa-bars-staggered'"></i>
+            </el-icon>
+          </el-button>
+
+          <!-- 新增移动端右侧扩展面板弹出/收起按钮 -->
+          <el-button 
+            class="top-bar-btn"
+            @click="toggleSidePanelOnMobile"
+            text
+            :title="sidePanelOpen ? t('backToChat') : t('openExtensions')">
+            <el-icon>
+              <i :class="sidePanelOpen ? 'fa-solid fa-comment' : 'fa-solid fa-puzzle-piece'"></i>
+            </el-icon>
+          </el-button>
+        </template>
         <el-button 
           v-if="!isAssistantMode&&!isMobile"
           @click="openLogDialog"
@@ -2162,7 +2175,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   ref="sidePanelRef"
                   :class="{ collapsed: !sidePanelOpen }" 
                   v-show="sidePanelOpen">
-                  
+
                   <!-- ✨ 书签式标签栏 (悬浮在面板外部) -->
                   <div class="vscode-tabs-header" v-if="openedExtensions.length > 0">
                       <!-- 固定主页书签 -->

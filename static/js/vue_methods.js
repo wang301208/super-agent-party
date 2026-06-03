@@ -14106,57 +14106,87 @@ async togglePlugin(plugin) {
     }
   },
 
-  // 收起对话区域
-// 收起左侧对话区域（让右侧面板向左填充）
-collapseChatArea() {
-  const sidePanel = this.$refs.sidePanelRef;
-  const chatArea = this.$refs.chatAreaRef;
+  toggleSidePanel() {
+    if (this.sidePanelOpen) {
+      this.collapseSidePanel();
+    } else {
+      this.expandSidePanel();
+    }
+  },
 
-  // 1. 核心修复：在隐藏左侧前，先清除右侧的像素限制
-  if (sidePanel) sidePanel.style.width = '';
-  if (chatArea) chatArea.style.width = '';
+  // 移动端专用面板单屏切换
+  toggleSidePanelOnMobile() {
+    if (this.sidePanelOpen) {
+      this.collapseSidePanel(); // 还原为 100% 对话流
+    } else {
+      this.expandSidePanel(); // 扩展为 100% 面板流
+    }
+  },
 
-  // 2. 更新状态
-  this.chatAreaOpen = false;
-  this.sidePanelOpen = true; 
-  this.sidePanelWidth = 100;
-  this.chatAreaWidth = 0;
+ // 收起对话区域
+  collapseChatArea() {
+    const sidePanel = this.$refs.sidePanelRef;
+    const chatArea = this.$refs.chatAreaRef;
 
-  // 3. 应用百分比布局
-  this.updatePanelWidths();
-},
+    if (sidePanel) sidePanel.style.width = '';
+    if (chatArea) chatArea.style.width = '';
 
-// 收起右侧侧边栏（让左侧对话区向右填充）
-collapseSidePanel() {
-  const chatArea = this.$refs.chatAreaRef;
-  const sidePanel = this.$refs.sidePanelRef;
+    this.chatAreaOpen = false;
+    this.sidePanelOpen = true; 
+    this.sidePanelWidth = 100;
+    this.chatAreaWidth = 0;
 
-  if (chatArea) chatArea.style.width = '';
-  if (sidePanel) sidePanel.style.width = '';
+    this.updatePanelWidths();
+  },
 
-  this.sidePanelOpen = false;
-  this.chatAreaOpen = true;
-  this.chatAreaWidth = 100;
-  this.sidePanelWidth = 0;
+  // 收起右侧侧边栏
+  collapseSidePanel() {
+    const chatArea = this.$refs.chatAreaRef;
+    const sidePanel = this.$refs.sidePanelRef;
 
-  this.updatePanelWidths();
-},
+    if (chatArea) chatArea.style.width = '';
+    if (sidePanel) sidePanel.style.width = '';
+
+    this.sidePanelOpen = false;
+    this.chatAreaOpen = true;
+    this.chatAreaWidth = 100;
+    this.sidePanelWidth = 0;
+
+    this.updatePanelWidths();
+  },
 
   // 展开对话区域
   expandChatArea() {
     this.chatAreaOpen = true;
-    this.chatAreaWidth = 50;
-    this.sidePanelWidth = 50;
+    if (this.isMobile) {
+      // 移动端排他性全屏
+      this.sidePanelOpen = false;
+      this.chatAreaWidth = 100;
+      this.sidePanelWidth = 0;
+    } else {
+      this.sidePanelOpen = true;
+      this.chatAreaWidth = 50;
+      this.sidePanelWidth = 50;
+    }
     this.updatePanelWidths();
   },
 
   // 展开侧边栏
   expandSidePanel() {
     this.sidePanelOpen = true;
-    this.chatAreaWidth = 50;
-    this.sidePanelWidth = 50;
+    if (this.isMobile) {
+      // 移动端排他性全屏
+      this.chatAreaOpen = false;
+      this.chatAreaWidth = 0;
+      this.sidePanelWidth = 100;
+    } else {
+      this.chatAreaOpen = true;
+      this.chatAreaWidth = 50;
+      this.sidePanelWidth = 50;
+    }
     this.updatePanelWidths();
   },
+
 
   // 重置面板大小
   resetPanelSizes() {
