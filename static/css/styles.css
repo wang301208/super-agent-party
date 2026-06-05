@@ -11666,9 +11666,10 @@ code {
     width: calc(100% - 24px) !important;
 }
 
+/* 👇 彻底移除多余的 12px 留白，使其完美贴合右侧边缘 */
 .chat-wrapper.collapsed-right .chat-area {
-    margin-right: 12px !important;
-    width: calc(100% - 12px) !important;
+    margin-right: 0 !important;
+    width: 100% !important;
 }
 
 /* ============================================================
@@ -12344,10 +12345,10 @@ pre.sp-content.sp-code {
 
 /* 3. 修复侧边栏收起时的“书签按钮”（展开把手）过于靠边的问题 */
 .resizer-collapsed-right {
-  right: 16px !important; /* 离开屏幕绝对右边缘，预留呼吸空间 */
+  right: 0px !important; /* 离开屏幕绝对右边缘，预留呼吸空间 */
 }
 .resizer-collapsed-left {
-  left: 16px !important;  /* 左侧也同理 */
+  left: 0px !important;  /* 左侧也同理 */
 }
 
 /* 既然离开了边缘，干脆把展开按钮升级为更圆润的“悬浮胶囊” */
