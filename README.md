@@ -1,4 +1,4 @@
-![image](static/source/cover.png)
+![image](static/source/cover_en.png)
 
 <div align="center">
   <a href="./README_ZH.md">
