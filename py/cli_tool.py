@@ -15,7 +15,7 @@ import socket
 import glob as std_glob
 import fnmatch
 from pathlib import Path
-from typing import AsyncIterator
+from typing import AsyncIterator, Tuple
 from datetime import datetime
 from collections import deque
 import aiofiles
@@ -23,7 +23,7 @@ import aiofiles.os
 import hashlib
 import anyio
 from py.get_setting import load_settings
-from py.get_setting import SKILLS_DIR
+from py.get_setting import SKILLS_DIR,IS_DOCKER
 
 COMMAND_TIMEOUT = 300  # 5分钟超时
 
@@ -1323,37 +1323,29 @@ async def local_net_tool(action: str, port: int = None) -> str:
 
 def resolve_strict_path(cwd: str, sub_path: str, check_symlink: bool = True) -> Path:
     """
-    严格工作区路径解析
-    - 禁止绝对路径
-    - 禁止 ../ 遍历  
-    - 禁止通过符号链接指向工作区外
+    严格工作区路径解析 (已修复跨平台斜杠混用 Bug)
     """
     base = Path(cwd).resolve()
     
     if not sub_path:
         return base
         
-    # 清理输入（阻止空字节、换行等）
     sub_path = sub_path.strip().replace('\x00', '').replace('\n', '')
     
-    # 显式禁止路径遍历模式（快速失败）
-    if '..' in sub_path.split(os.sep):
+    # ★ 修复：利用 Path.parts 跨平台安全解析路径节点，防止正反斜杠混用逃逸
+    if '..' in Path(sub_path).parts:
         raise PermissionError(f"Path traversal detected: {sub_path}")
     
-    # 禁止绝对路径（Windows C:\ 和 Unix /）
     if os.path.isabs(sub_path) or (len(sub_path) > 1 and sub_path[1] == ':'):
         raise PermissionError(f"Absolute paths not allowed: {sub_path}")
     
-    # 解析完整路径
     target = (base / sub_path).resolve()
     
-    # 关键检查：确保 resolve 后的路径仍在 base 内
     try:
         target.relative_to(base)
     except ValueError:
         raise PermissionError(f"Access denied: {sub_path} resolves outside workspace")
     
-    # 符号链接检查（防止 /workspace/link -> /etc）
     if check_symlink and target.exists():
         real_path = target.resolve(strict=True)
         try:
@@ -1363,58 +1355,66 @@ def resolve_strict_path(cwd: str, sub_path: str, check_symlink: bool = True) -> 
             
     return target
 
-from typing import Tuple
 
 def validate_bash_command(command: str, cwd: str, mode: str = "default") -> Tuple[bool, str]:
     """
-    增强版安全校验策略（支持 Win/Mac/Linux 跨平台）
+    动态路径感知安全校验（彻底封堵绝对路径逃逸通道）
     """
     cmd_lower = command.lower()
     
-    # ===== 1. 路径穿越与敏感目录防御 =====
-    # 防止多级向上跳转逃逸工作区 (例如 ../../../etc/passwd)
-    if re.search(r'(\.\.[/\\]){2,}', command):
-        return False, "Multiple path traversal (../../) is blocked"
+    # 获取规范化的工作区绝对路径
+    resolved_cwd = str(Path(cwd).resolve()).lower()
+    
+    # ==================== [新增] 动态绝对路径逃逸检测 ====================
+    # 匹配 Windows 盘符路径（如 D:\path）或 Unix 绝对路径（如 /path）
+    # 排除掉一些常见命令的参数干扰，专注于提取路径
+    potential_paths = re.findall(r'([a-zA-Z]:[/\\][^\s"\'|&<>]+|/[^\s"\'|&<>]+)', command)
+    
+    for raw_path in potential_paths:
+        try:
+            # 规范化命令中出现的每一个绝对路径
+            resolved_target = str(Path(raw_path).resolve()).lower()
+            
+            # 关键判定：如果该绝对路径不以工作区路径(cwd)开头，说明 AI 试图操作外部文件！
+            if not resolved_target.startswith(resolved_cwd):
+                # 排除一些系统级工具路径本身的误判（比如 C:\Windows\System32\cmd.exe）
+                if "system32" in resolved_target or "powershell" in resolved_target:
+                    continue
+                return False, f"Access to path outside workspace is blocked: {raw_path}"
+        except Exception:
+            continue
+    # ====================================================================
 
-    # 跨平台敏感目录 (兼容 / 和 \ 写法)
+    # 1. 防止路径穿越逃逸
+    if re.search(r'\.\.[/\\]', command) or '..' in Path(command).parts:
+        return False, "Path traversal (..) is blocked"
+
+    # 2. 跨平台敏感目录防护
     sensitive_roots = [
-        # Linux / macOS
         r'(?:\s|^)/etc', r'(?:\s|^)/var', r'(?:\s|^)/root', 
         r'(?:\s|^)/bin', r'(?:\s|^)/sbin', r'(?:\s|^)/usr/local/bin',
         r'(?:\s|^)/sys', r'(?:\s|^)/proc', 
-        # macOS 专属
         r'(?:\s|^)/Library', r'(?:\s|^)/System',
-        # Windows (兼容 C:\Windows 和 C:/Windows)
         r'(?:\s|^)[a-z]:[/\\]Windows', r'(?:\s|^)[a-z]:[/\\]Program Files', 
         r'(?:\s|^)[a-z]:[/\\]Users[/\\](?:Default|Public|Administrator)' 
     ]
     
     for pattern in sensitive_roots:
         if re.search(pattern, command, re.IGNORECASE):
-            return False, f"Access to sensitive system directory blocked by pattern: {pattern}"
+            return False, f"Access to sensitive system directory blocked"
 
-    # 禁止直接 cd 到根目录或其他盘符
-    if re.search(r'\bcd\s+/[a-z0-9_]*$', command, re.IGNORECASE):
-        return False, "Changing directory to root is blocked"
-    if re.search(r'\bcd\s+[a-z]:[/\\]', command, re.IGNORECASE):
-        return False, "Changing Windows drive directly is blocked"
-
-    # ===== 2. 跨平台毁灭性操作 =====
+    # 3. 跨平台毁灭性操作
     destructive_patterns = [
-        # Linux/Mac 文件删除 (覆盖 rm -rf /, rm -rf /*, rm -r -f /)
         (r'rm\s+-[rRfF\s]+\s*(/|[a-z]:[/\\])\*?', "Recursive delete root"),
-        # Linux 危险操作
         (r'mkfs\.[a-z]+', "Filesystem format"),                    
         (r'dd\s+if=.*of=/dev/[a-z]', "Direct device write"),       
         (r'>?\s*/dev/(sda|hd|nvme|mmcblk)', "Block device access"),
         (r'chmod\s+-[R\s]*777\s+/', "Change root permissions"),
         (r'chown\s+-[R\s]*root\s+/', "Change root ownership"),
         (r':\(\)\{\s*:\|:&?\s*\};\s*:', "Fork bomb"), 
-        # Windows 危险操作 (注册表破坏、危险格式化)
         (r'(?:\s|^)format\s+[a-z]:', "Windows disk format"),
         (r'(?:\s|^)reg\s+(delete|add)\s+(HKLM|HKEY_LOCAL_MACHINE)', "Modify system registry"),
         (r'Remove-Item\s+-Recurse\s+-Force\s+[a-z]:[/\\]', "Powershell recursive delete root"),
-        # macOS 危险操作
         (r'nvram\s+-c', "Clear Mac NVRAM"),
     ]
     
@@ -1422,25 +1422,22 @@ def validate_bash_command(command: str, cwd: str, mode: str = "default") -> Tupl
         if re.search(pattern, command, re.IGNORECASE):
             return False, f"Destructive operation blocked: {reason}"
     
-    # ===== 3. 风险操作 (提权、钓鱼、远程执行) =====
+    # 4. 风险操作
     if mode != "yolo":
         risk_patterns = [
-            # Linux/Mac 提权与远程加载
-            (r'(?:\s|^)sudo\s+', "sudo usage blocked (prevents password wait/escalation)"),
+            (r'(?:\s|^)sudo\s+', "sudo usage blocked"),
             (r'(curl|wget).*\|\s*(sh|bash|zsh|python|perl|php)', "Remote execution via pipe"),
+            (r'base64\s+-d\s*\|\s*(sh|bash|zsh|python)', "Obfuscated base64 command execution blocked"),
             (r'$\{?HOME\}?', "HOME env variable usage"),
             (r'~\s*/', "Home directory access via ~"),
-            # macOS 钓鱼警告 (防范 AI 弹窗骗取用户密码)
             (r'(?:\s|^)osascript\s+-e\s+.*password', "AppleScript password prompt blocked"),
-            # Windows 远程加载 (Powershell IEX)
             (r'(Invoke-WebRequest|iwr|Invoke-RestMethod|irm).*\|\s*(Invoke-Expression|iex)', "PowerShell remote script execution"),
         ]
         for pattern, reason in risk_patterns:
             if re.search(pattern, command, re.IGNORECASE):
-                return False, f"{reason} blocked in {mode} mode"
+                return False, f"{reason} blocked"
     
     return True, command
-
 
 async def shell_tool_local(command: str, background: bool = False, timeout: int = 600) -> AsyncIterator[str]:
     """
@@ -1470,7 +1467,7 @@ async def shell_tool_local(command: str, background: bool = False, timeout: int 
     # ==================== 非 Windows 且安装了 ZeroBox 的情况 ====================
     # 注意：SDK 目前是同步阻塞设计。为了保持 CLI 响应，我们在线程中运行它。
     # 且为了 PID 管理器的兼容性，仅在前台任务（background=False）时使用 SDK。
-    if system != "Windows" and HAS_ZEROBOX and not background:
+    if system != "Windows" and HAS_ZEROBOX and not background and not IS_DOCKER:
         try:
             yield f"--- [Sandbox Mode] Executing via zerobox.Sandbox ---\n"
             
