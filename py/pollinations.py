@@ -164,7 +164,17 @@ def process_image_content(text):
     return result
 
 
-async def openai_chat_image(prompt: str,img_url_list: list = []):
+# 辅助工具：安全兼容读取对象属性或字典键
+def get_attr_or_key(obj, key, default=None):
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
+
+
+# ==========================================
+# 2. 您的对话生图函数（增加对 modalities 的支持）
+# ==========================================
+async def openai_chat_image(prompt: str, img_url_list: list = []):
     settings = await load_settings()
 
     model = settings["text2imgSettings"]["model"]
@@ -172,7 +182,7 @@ async def openai_chat_image(prompt: str,img_url_list: list = []):
     base_url = settings["text2imgSettings"]["base_url"]
     api_key = settings["text2imgSettings"]["api_key"]
     try:
-        client = AsyncClient(api_key=api_key,base_url=base_url)
+        client = AsyncClient(api_key=api_key, base_url=base_url)
         if img_url_list:
             content = []
             for img_url in img_url_list:
@@ -184,22 +194,64 @@ async def openai_chat_image(prompt: str,img_url_list: list = []):
             content.append({"type": "text", "text": prompt})
         else:
             content = prompt
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[
-                {
-                    "role":"user",
-                    "content":content
-                }
-            ]
-        )
+
+        # 优先尝试 modalities 参数
+        try:
+            response = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": content
+                    }
+                ],
+                extra_body={"modalities": ["image", "text"]}
+            )
+        except Exception as e:
+            err_msg = str(e).lower()
+            # 如果模型不支持 modalities 或者是老版本接口，捕获异常并降级回常规调用
+            if "modalities" in err_msg or "extra parameters" in err_msg or "unsupported" in err_msg or "400" in err_msg:
+                response = await client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": content
+                        }
+                    ]
+                )
+            else:
+                raise e
+
     except Exception as e:
         print(e)
         return f"ERROR: {e}"
     
+    res = ""
     if response:
-        res = response.choices[0].message.content
-        res = process_image_content(res)
+        choice = response.choices[0]
+        message = choice.message
+        
+        # 1. 提取基础文本内容
+        res_text = get_attr_or_key(message, 'content') or ""
+        
+        # 2. 如果是通过 modalities 参数原生生成的图片（存放在 images 数组中）
+        # 我们只需将其直接包装成 Markdown 语法拼接在文本尾部
+        images_field = get_attr_or_key(message, 'images')
+        if images_field and isinstance(images_field, list):
+            for img in images_field:
+                img_type = get_attr_or_key(img, 'type')
+                if img_type == 'image_url':
+                    img_url_obj = get_attr_or_key(img, 'image_url')
+                    if img_url_obj:
+                        url_str = get_attr_or_key(img_url_obj, 'url')
+                        if url_str:
+                            # 拼接到文本末尾，让后续的正则统一解析
+                            res_text += f"\n\n![image]({url_str})"
+
+        # 3. 统一调用您原有的 process_image_content 函数进行本地保存和 URL 替换
+        res = process_image_content(res_text)
+        
     return res
         
 openai_chat_image_tool = {

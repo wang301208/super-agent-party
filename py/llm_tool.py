@@ -27,7 +27,7 @@ async def get_image_base64(image_url: str) -> str:
     if 'uploaded_files' in parsed_url.path:
         HOST = get_host()
         PORT = get_port()
-        if HOST == '0.0.0.0': HOST = '127.0.0.1'
+        HOST = '127.0.0.1'
         
         # 【安全动作】使用 sanitize_url 强制重写 netloc，切断原始输入流
         safe_target_url = sanitize_url(image_url, force_netloc=f"{HOST}:{PORT}")
