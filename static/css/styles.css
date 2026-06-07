@@ -13313,3 +13313,57 @@ pre.code-block {
     padding-top: 48px !important; /* 桌面端预留 48px 的呼吸感留白 */
     transition: padding-top 0.3s var(--ease-out-smooth);
 }
+
+
+/* =========================================
+   娱乐模式下图片气泡无缝填充 & 圆角剪裁终极修复
+   ========================================= */
+
+/* 1. 强力匹配任何包含图片的段落气泡，彻底清除内边距与空白背景 */
+.mode-entertainment .stream-content p:has(img),
+.mode-entertainment .markdown-body p:has(img),
+.mode-entertainment .markdown-body div:first-child p:has(img) {
+    padding: 0 !important;
+    overflow: hidden !important;      /* 核心：确保超出异形圆角部分被裁剪掉 */
+    background-color: var(--el-bg-color) !important;
+    border: 1px solid var(--el-border-color-lighter) !important;
+    
+    /* 强制应用与普通文本气泡完全一致的 QQ 异形圆角 */
+    border-radius: 18px 18px 18px 4px !important; 
+    
+    display: inline-block !important; /* 使气泡宽度完美包裹图片，不产生右侧多余空白 */
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* 2. 防御性处理：如果图片外层套了 <a> 标签（用于点击放大预览），重置其布局与圆角 */
+.mode-entertainment .stream-content p:has(img) a,
+.mode-entertainment .markdown-body p:has(img) a,
+.mode-entertainment .markdown-body div:first-child p:has(img) a {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: inherit !important; /* 继承父级的异形圆角 */
+    overflow: hidden !important;
+}
+
+/* 3. 让图片自然平铺到气泡边缘，不留任何缝隙，并继承异形圆角 */
+.mode-entertainment .stream-content p:has(img) img,
+.mode-entertainment .markdown-body p:has(img) img,
+.mode-entertainment .markdown-body div:first-child p:has(img) img {
+    display: block !important;
+    width: 100% !important;            /* 宽度占满气泡 */
+    height: auto !important;           /* 高度等比例缩放，保证二游立绘、卡牌不被拉伸变形 */
+    
+    /* 尺寸限制：既保证精美，又防止长图撑爆聊天区域 */
+    max-width: 320px !important;       /* 限制横向宽度，与普通气泡视觉体量一致 */
+    max-height: 480px !important;      /* 限制纵向高度上限 */
+    
+    object-fit: contain !important;    /* 保证整张卡面（包括顶部文字和底部菜单）完整显示，不被裁剪 */
+    border-radius: inherit !important; /* 关键：强制图片各角完美贴合父级 18px 18px 18px 4px 的圆角 */
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+}
