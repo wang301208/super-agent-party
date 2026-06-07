@@ -1202,6 +1202,30 @@ let vue_methods = {
     },
 
 
+    preprocessEntertainmentText(content) {
+      if (!content) return '';
+      
+      // 仅在娱乐模式下处理
+      if (this.systemSettings && this.systemSettings.chatMode === 'entertainment') {
+        // 利用现有的 splitCodeAndText，确保在转换单换行符时，绝不破坏代码块内部的排版
+        const parts = this.splitCodeAndText(content);
+        let inUnclosedCodeBlock = false;
+
+        return parts.map(part => {
+          if (part.type === 'code') {
+            inUnclosedCodeBlock = !part.closed;
+            return part.content;
+          } else if (inUnclosedCodeBlock) {
+            return part.content;
+          } else {
+            // 将普通文本中的单换行符转换为双换行符
+            return part.content.replace(/(?<!\n)\n(?!\n)/g, '\n\n');
+          }
+        }).join('');
+      }
+      return content;
+    },
+
     formatMessage(content, index) {
       if (!content) return '';
 
@@ -1215,7 +1239,6 @@ let vue_methods = {
       }
 
       // --- 预处理阶段 ---
-      // 【修复点】：原代码这里误传了 content，现改为 processedForRender，使上面的表格补全生效
       const parts = this.splitCodeAndText(processedForRender);
       let inUnclosedCodeBlock = false;
 
@@ -1229,13 +1252,19 @@ let vue_methods = {
           let formatted = part.content;
 
           // ============================================================
-          // 【新增】LaTeX 公式保护机制
+          // 【新增】娱乐模式下：单换行符（\n）转换为双换行符（\n\n）
+          // 使用负向断言（Lookbehind & Lookahead）确保不重复影响已有的双换行符
+          // ============================================================
+          if (this.systemSettings && this.systemSettings.chatMode === 'entertainment') {
+            formatted = formatted.replace(/(?<!\n)\n(?!\n)/g, '\n\n');
+          }
+
+          // ============================================================
+          // LaTeX 公式保护机制
           // 防止公式内部的 < 和 > 被后续的 HTML 标签过滤正则误杀
           // ============================================================
           // 匹配 $$...$$ (支持跨行和流式输出未闭合) 以及 $...$ (行内公式)
           formatted = formatted.replace(/\$\$([\s\S]*?)(?:\$\$|$)|\$([^\$\n]+)\$/g, function(match) {
-            // 将公式中的 < 替换为 \lt，> 替换为 \gt（KaTeX 支持且非常安全）
-            // 后面加一个空格是为了防止和后面的字母发生粘连（例如误变成 \ltx 导致报错）
             return match.replace(/</g, '\\lt ').replace(/>/g, '\\gt ');
           });
 

@@ -1264,10 +1264,13 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                                             <!-- 文本块 -->
                                             <div v-else-if="block.type === 'text'" class="a2ui-text-wrapper">
-                                                <!-- ✨【优化点3】：使用 block.segments 代替 splitMessageContent(block.content) -->
                                                 <template v-for="(segment, sIdx) in (block.segments || [{ type: 'text', content: block.content }])" :key="sIdx">
-                                                    <!-- 🌟 同样增加 segment.content 的判断 -->
-                                                    <div v-if="segment.type === 'text' && segment.content" class="stream-content" :class="{ 'streaming': isTyping && index === messages.length - 1 && sIdx === (block.segments || []).length - 1 }" v-morph:format="segment.content" style="display: inline-block; width: 100%;"></div>
+                                                    <div v-if="segment.type === 'text' && segment.content" 
+                                                        class="stream-content" 
+                                                        :class="{ 'streaming': isTyping && index === messages.length - 1 && sIdx === (block.segments || []).length - 1 }" 
+                                                        v-morph:format="preprocessEntertainmentText(segment.content)" 
+                                                        style="display: inline-block; width: 100%;">
+                                                    </div>
                                                     <a2-u-i-renderer v-else-if="segment.type === 'ui'" :config="segment.content" @action="handleA2UIAction"></a2-u-i-renderer>
                                                 </template>
                                             </div>
@@ -1326,10 +1329,13 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                             <!-- === 旧架构兼容 === -->
                             <div v-else>
-                                <!-- ✨【优化点4】：使用 message.segments 代替 splitMessageContent(message.content) -->
                                 <template v-for="(segment, segIndex) in (message.segments || [{ type: 'text', content: message.content }])" :key="segIndex">
-                                    <!-- 🌟 增加对 segment.content 的判断，防止空文本占位 -->
-                                    <div v-if="segment.type === 'text' && segment.content" class="stream-content" :class="{ 'streaming': isTyping && index === messages.length - 1 && segIndex === (message.segments || []).length - 1 }" v-morph:format="segment.content" style="display: inline-block; width: 100%;"></div>
+                                    <div v-if="segment.type === 'text' && segment.content" 
+                                        class="stream-content" 
+                                        :class="{ 'streaming': isTyping && index === messages.length - 1 && segIndex === (message.segments || []).length - 1 }" 
+                                        v-morph:format="preprocessEntertainmentText(segment.content)" 
+                                        style="display: inline-block; width: 100%;">
+                                    </div>
                                     <a2-u-i-renderer v-else-if="segment.type === 'ui'" :config="segment.content" @action="handleA2UIAction"></a2-u-i-renderer>
                                 </template>
                                 <div v-if="isTyping && index === messages.length - 1 && !message.content"><i class="fa-solid fa-spinner fa-spin"></i></div>
@@ -17316,10 +17322,13 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                                             <!-- 文本块 -->
                                             <div v-else-if="block.type === 'text'" class="a2ui-text-wrapper">
-                                                <!-- ✨【优化点3】：使用 block.segments 代替 splitMessageContent(block.content) -->
                                                 <template v-for="(segment, sIdx) in (block.segments || [{ type: 'text', content: block.content }])" :key="sIdx">
-                                                    <!-- 🌟 同样增加 segment.content 的判断 -->
-                                                    <div v-if="segment.type === 'text' && segment.content" class="stream-content" :class="{ 'streaming': isTyping && index === messages.length - 1 && sIdx === (block.segments || []).length - 1 }" v-morph:format="segment.content" style="display: inline-block; width: 100%;"></div>
+                                                    <div v-if="segment.type === 'text' && segment.content" 
+                                                        class="stream-content" 
+                                                        :class="{ 'streaming': isTyping && index === messages.length - 1 && sIdx === (block.segments || []).length - 1 }" 
+                                                        v-morph:format="preprocessEntertainmentText(segment.content)" 
+                                                        style="display: inline-block; width: 100%;">
+                                                    </div>
                                                     <a2-u-i-renderer v-else-if="segment.type === 'ui'" :config="segment.content" @action="handleA2UIAction"></a2-u-i-renderer>
                                                 </template>
                                             </div>
@@ -17378,10 +17387,13 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                             <!-- === 旧架构兼容 === -->
                             <div v-else>
-                                <!-- ✨【优化点4】：使用 message.segments 代替 splitMessageContent(message.content) -->
                                 <template v-for="(segment, segIndex) in (message.segments || [{ type: 'text', content: message.content }])" :key="segIndex">
-                                    <!-- 🌟 增加对 segment.content 的判断，防止空文本占位 -->
-                                    <div v-if="segment.type === 'text' && segment.content" class="stream-content" :class="{ 'streaming': isTyping && index === messages.length - 1 && segIndex === (message.segments || []).length - 1 }" v-morph:format="segment.content" style="display: inline-block; width: 100%;"></div>
+                                    <div v-if="segment.type === 'text' && segment.content" 
+                                        class="stream-content" 
+                                        :class="{ 'streaming': isTyping && index === messages.length - 1 && segIndex === (message.segments || []).length - 1 }" 
+                                        v-morph:format="preprocessEntertainmentText(segment.content)" 
+                                        style="display: inline-block; width: 100%;">
+                                    </div>
                                     <a2-u-i-renderer v-else-if="segment.type === 'ui'" :config="segment.content" @action="handleA2UIAction"></a2-u-i-renderer>
                                 </template>
                                 <div v-if="isTyping && index === messages.length - 1 && !message.content"><i class="fa-solid fa-spinner fa-spin"></i></div>
