@@ -11700,12 +11700,15 @@ code {
 
 /* 2. 定义收起状态 - 拦截 Vue 的 v-show="false" */
 /* 当点击隐藏时，我们用 CSS 截获 display:none，并将其转化为尺寸和透明度的动画 */
+body.has-custom-bg .chat-history-sidebar[style*="display: none"],
 .chat-history-sidebar[style*="display: none"] {
     width: 0 !important;
     min-width: 0 !important;
     opacity: 0 !important;
     border-right-width: 0 !important; /* 去掉边框，防止完全收起时残留一条线 */
-    pointer-events: none; /* 收起后禁止点击穿透 */
+    margin: 0 !important;             /* 强力清除折叠/隐藏状态下的外边距，彻底解决偏右问题 */
+    padding: 0 !important;            /* 清除内边距 */
+    pointer-events: none;             /* 收起后禁止点击穿透 */
 }
 
 /* 3. 防挤压保护：防止收起过程中，内部文字和按钮被挤压换行导致鬼畜闪烁 */
@@ -13447,4 +13450,279 @@ pre.code-block {
 .mode-entertainment .message-blocks-container {
     padding: 0 !important;
     margin: 0 !important;
+}
+
+
+/* =========================================
+   全局背景图毛玻璃透视终极修复 (Body-level Glassmorphism)
+   ========================================= */
+
+/* 1. 强力清除所有阻挡视线的纯色大背景 (包含设置页、工具页等次级路由) */
+body.has-custom-bg #app,
+body.has-custom-bg .el-container,
+body.has-custom-bg .el-main,
+body.has-custom-bg .content,
+body.has-custom-bg .page,
+body.has-custom-bg .chat-container,
+body.has-custom-bg .chat-wrapper,
+body.has-custom-bg .chat-area,
+body.has-custom-bg .chat-main-column,
+body.has-custom-bg .messages-container,
+body.has-custom-bg .system-container,
+body.has-custom-bg .suite-layout,
+body.has-custom-bg .suite-content,
+body.has-custom-bg .keybox-container,
+body.has-custom-bg .api-container,
+body.has-custom-bg .license-notice,
+body.has-custom-bg .ai-browser-container,   
+body.has-custom-bg .browser-welcome-page,   
+body.has-custom-bg .ext-iframe-wrapper {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* 2. 最左侧主菜单 (一级导航) */
+body.has-custom-bg .sidebar {
+  background-color: color-mix(in srgb, var(--el-bg-color-page) 50%, transparent) !important;
+  backdrop-filter: blur(25px) saturate(150%);
+  -webkit-backdrop-filter: blur(25px) saturate(150%);
+  border-right: 1px solid rgba(128, 128, 128, 0.15) !important;
+}
+
+/* 扒掉菜单项自带底色 */
+body.has-custom-bg .el-menu-vertical,
+body.has-custom-bg .el-menu-item {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+body.has-custom-bg .el-menu-item:hover,
+body.has-custom-bg .el-menu-item.is-active {
+  background-color: rgba(128, 128, 128, 0.15) !important;
+}
+
+/* 3. 二级导航与侧边栏 (历史对话栏、设置页侧栏) - 悬浮大圆角 */
+body.has-custom-bg .chat-history-sidebar,
+body.has-custom-bg .suite-sidebar {
+  background-color: color-mix(in srgb, var(--el-bg-color-page) 60%, transparent) !important;
+  backdrop-filter: blur(25px) saturate(150%);
+  -webkit-backdrop-filter: blur(25px) saturate(150%);
+  border: 1px solid rgba(128, 128, 128, 0.15) !important;
+  
+  /* 悬浮圆角处理 */
+  border-radius: 16px !important;
+  margin: 12px 0 12px 12px !important;
+  height: calc(100% - 24px) !important;
+  overflow: hidden !important; 
+}
+
+/* 🌟 3.5 核心修复：浏览器左侧主体卡片化，并强制将网页裁切为 16px 圆角 🌟 */
+body.has-custom-bg .browser-body {
+  background-color: color-mix(in srgb, var(--el-bg-color-page) 50%, transparent) !important;
+  backdrop-filter: blur(25px) saturate(150%);
+  -webkit-backdrop-filter: blur(25px) saturate(150%);
+  border: 1px solid rgba(128, 128, 128, 0.15) !important;
+  
+  /* 悬浮圆角处理：使其像一个卡片浮在背景上 */
+  border-radius: 16px !important;
+  margin: 12px 12px 12px 12px !important; /* 四周预留安全间距 */
+  height: calc(100% - 24px) !important;
+  overflow: hidden !important; /* 关键：强行裁切内部的任何网页为圆角 */
+}
+
+/* 确保 webview 及其包装层也同步继承圆角，消除任何闪烁直角 */
+body.has-custom-bg .webview-wrapper,
+body.has-custom-bg .webview-element {
+  border-radius: 16px !important;
+  overflow: hidden !important;
+}
+
+/* 4. 右侧扩展面板与内页实体卡片 */
+body.has-custom-bg .side-panel {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+body.has-custom-bg .side-panel-body-container,
+body.has-custom-bg .settings-form,
+body.has-custom-bg .behavior-block,
+body.has-custom-bg .provider-card,
+body.has-custom-bg .tool-item,
+body.has-custom-bg .extension-card,
+body.has-custom-bg .vendor-card,
+body.has-custom-bg .task-card-item .el-card,
+body.has-custom-bg .guide-card,
+body.has-custom-bg .fav-icon-box { 
+  background-color: color-mix(in srgb, var(--el-bg-color-page) 60%, transparent) !important;
+  backdrop-filter: blur(25px) saturate(150%);
+  -webkit-backdrop-filter: blur(25px) saturate(150%);
+  border: 1px solid rgba(128, 128, 128, 0.15) !important;
+  border-radius: 16px !important;
+}
+
+/* 4.5 浏览器 Copilot 侧边栏对齐悬浮大圆角 */
+body.has-custom-bg .browser-copilot-sidebar {
+  background-color: color-mix(in srgb, var(--el-bg-color-page) 60%, transparent) !important;
+  backdrop-filter: blur(25px) saturate(150%);
+  -webkit-backdrop-filter: blur(25px) saturate(150%);
+  border: 1px solid rgba(128, 128, 128, 0.15) !important;
+  
+  /* 悬浮圆角处理 */
+  border-radius: 16px !important;
+  margin: 12px 12px 12px 0 !important; 
+  height: calc(100% - 24px) !important;
+  overflow: hidden !important;
+  
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+              margin 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+              opacity 0.25s ease !important;
+}
+
+body.has-custom-bg .browser-copilot-sidebar.sidebar-collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  opacity: 0 !important;
+}
+
+/* 5. 顶部栏与大输入框、大搜索框 */
+body.has-custom-bg .top-bar {
+  background-color: color-mix(in srgb, var(--el-bg-color-page) 40%, transparent) !important;
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.1) !important;
+}
+
+body.has-custom-bg .unified-input-wrapper,
+body.has-custom-bg .hero-input-wrapper,
+body.has-custom-bg .ios-search-wrapper { 
+  background-color: color-mix(in srgb, var(--el-bg-color) 65%, transparent) !important;
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(128, 128, 128, 0.15) !important;
+}
+
+body.has-custom-bg .ios-search-input {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* 🌟 核心修复：清除切换引擎按钮的白底，使其与搜索框完全融为一体 🌟 */
+body.has-custom-bg .engine-selector,
+body.has-custom-bg .current-engine {
+  background: transparent !important;
+  background-color: transparent !important;
+  border-right: 1px solid rgba(128, 128, 128, 0.15) !important; /* 半透明精细分割线 */
+}
+
+/* 5.5 模型指示器与状态胶囊玻璃化 */
+body.has-custom-bg .status-pill {
+  background-color: color-mix(in srgb, var(--el-fill-color-light) 50%, transparent) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(128, 128, 128, 0.15) !important;
+}
+
+body.has-custom-bg .engine-dropdown {
+  background-color: color-mix(in srgb, var(--el-bg-color) 75%, transparent) !important;
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(128, 128, 128, 0.2) !important;
+}
+
+body.has-custom-bg .browser-toggle-handle {
+  border-radius: 12px 0 0 12px !important;
+}
+
+/* 6. 消息操作区透明 */
+body.has-custom-bg .message.assistant .tts-controls,
+body.has-custom-bg .message-actions,
+body.has-custom-bg .tts-controls .el-button,
+body.has-custom-bg .message-actions .el-button {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+body.has-custom-bg .tts-controls .el-button:hover,
+body.has-custom-bg .message-actions .el-button:hover {
+  background-color: rgba(128, 128, 128, 0.15) !important;
+}
+
+/* 7. 聊天气泡处理 */
+body.has-custom-bg .user .message-content {
+  background-color: color-mix(in srgb, var(--el-color-primary) 70%, transparent) !important;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid rgba(128, 128, 128, 0.15) !important;
+}
+
+body.has-custom-bg .assistant .message-content:not(.mode-entertainment):not(.mode-work),
+body.has-custom-bg .system .message-content:not(.mode-entertainment):not(.mode-work) {
+  background-color: color-mix(in srgb, var(--el-bg-color) 70%, transparent) !important;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid rgba(128, 128, 128, 0.15) !important;
+}
+
+/* 7.3 娱乐模式气泡打碎透射 */
+body.has-custom-bg .assistant .message-content.mode-entertainment,
+body.has-custom-bg .system .message-content.mode-entertainment,
+body.has-custom-bg .mode-entertainment .markdown-body,
+body.has-custom-bg .mode-entertainment .message-blocks-container,
+body.has-custom-bg .mode-entertainment .a2ui-text-wrapper,
+body.has-custom-bg .mode-entertainment .stream-content {
+  background: transparent !important;
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+body.has-custom-bg .mode-entertainment .stream-content > p,
+body.has-custom-bg .mode-entertainment .stream-content > pre,
+body.has-custom-bg .mode-entertainment .stream-content > ul,
+body.has-custom-bg .mode-entertainment .stream-content > ol,
+body.has-custom-bg .mode-entertainment .stream-content > blockquote,
+body.has-custom-bg .mode-entertainment .stream-content > table,
+body.has-custom-bg .mode-entertainment .stream-content > h1,
+body.has-custom-bg .mode-entertainment .stream-content > h2,
+body.has-custom-bg .mode-entertainment .stream-content > h3,
+body.has-custom-bg .mode-entertainment .stream-content > h4,
+body.has-custom-bg .mode-entertainment .stream-content > h5,
+body.has-custom-bg .mode-entertainment .stream-content > h6,
+body.has-custom-bg .mode-entertainment .markdown-body > div:first-child > p,
+body.has-custom-bg .mode-entertainment .markdown-body > div:first-child > pre,
+body.has-custom-bg .mode-entertainment .markdown-body > div:first-child > ul,
+body.has-custom-bg .mode-entertainment .markdown-body > div:first-child > ol,
+body.has-custom-bg .mode-entertainment .markdown-body > div:first-child > blockquote,
+body.has-custom-bg .mode-entertainment .markdown-body > div:first-child > table,
+body.has-custom-bg .mode-entertainment .markdown-body > div:first-child > h1,
+body.has-custom-bg .mode-entertainment .markdown-body > div:first-child > h2,
+body.has-custom-bg .mode-entertainment .markdown-body > div:first-child > h3,
+body.has-custom-bg .mode-entertainment .markdown-body > div:first-child > h4,
+body.has-custom-bg .mode-entertainment .markdown-body > div:first-child > h5,
+body.has-custom-bg .mode-entertainment .markdown-body > div:first-child > h6,
+body.has-custom-bg .mode-entertainment .sap-process-block.type-approval {
+  background-color: color-mix(in srgb, var(--el-bg-color) 70%, transparent) !important;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid rgba(128, 128, 128, 0.15) !important;
+}
+
+/* 8. 全局护眼叠加层 */
+body.has-custom-bg::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  z-index: 0;
+}
+body.has-custom-bg #app {
+  position: relative;
+  z-index: 1;
 }

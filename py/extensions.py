@@ -120,46 +120,41 @@ def find_root_dir(temp_path: Path) -> Path:
     return temp_path
 
 
-def parse_repo_urls(repo_url: str) -> tuple[Optional[str], list[str]]:
+def parse_repo_urls(repo_url: str, github_proxy: Optional[str] = None) -> list[str]:
     """
-    解析源仓库链接，统一默认将极狐 GitLab 作为对应的 GitHub 镜像备份 [1]。
-    忽略配置文件中声明的第三方备用地址，强制全线闭环管理 [1]。
+    解析源仓库链接。
+    如果配置了代理，会优先添加经由代理包装后的 URL，随后放置 GitHub 直连 URL 作为兜底。
     """
     repo_url = repo_url.strip().rstrip('/').removesuffix('.git')
     parsed = urlparse(repo_url)
     path_parts = parsed.path.strip('/').split('/')
     
-    github_url = None
-    jihulab_urls = []
+    urls = []
     
     if 'github.com' in parsed.netloc.lower() and len(path_parts) >= 2:
         owner, repo = path_parts[0], path_parts[1]
-        github_url = f"https://github.com/{owner}/{repo}/archive/HEAD.zip"
+        github_zip = f"https://github.com/{owner}/{repo}/archive/HEAD.zip"
         
-        # 默认生成极狐 GitLab 备份直链，包含 main 和 master 两种常见主分支分支名 [1]
-        jihulab_urls = [
-            f"https://jihulab.com/{owner}/{repo}/-/archive/main/{repo}-main.zip",
-            f"https://jihulab.com/{owner}/{repo}/-/archive/master/{repo}-master.zip"
-        ]
-    elif 'jihulab.com' in parsed.netloc.lower() and len(path_parts) >= 2:
-        owner, repo = path_parts[0], path_parts[1]
-        jihulab_urls = [
-            f"https://jihulab.com/{owner}/{repo}/-/archive/main/{repo}-main.zip",
-            f"https://jihulab.com/{owner}/{repo}/-/archive/master/{repo}-master.zip"
-        ]
+        # 1. 优先使用用户配置的 GitHub 代理
+        if github_proxy:
+            proxy_prefix = github_proxy.strip()
+            if proxy_prefix:
+                if not proxy_prefix.endswith('/'):
+                    proxy_prefix += '/'
+                urls.append(f"{proxy_prefix}{github_zip}")
+        
+        # 2. 其次添加直连地址作为备用
+        urls.append(github_zip)
     else:
         # 其他类型仓库兜底
-        jihulab_urls = [
-            f"{repo_url}/archive/refs/heads/main.zip",
-            f"{repo_url}/archive/refs/heads/master.zip"
-        ]
+        urls.append(f"{repo_url}/archive/refs/heads/main.zip")
+        urls.append(f"{repo_url}/archive/refs/heads/master.zip")
         
-    return github_url, jihulab_urls
+    return urls
 
 
 # ==================== 安装任务管理 ====================
 
-# 内存中的任务状态存储（生产环境建议用 Redis）
 install_tasks: Dict[str, Dict[str, Any]] = {}
 
 
@@ -184,7 +179,7 @@ def get_ext_id_from_url(url: str) -> str:
 
 class GitHubInstallRequest(BaseModel):
     url: str = Field(..., description="主仓库地址")
-    backupUrl: Optional[str] = Field("", description="备用仓库地址")
+    githubProxy: Optional[str] = Field("", description="GitHub 仓库代理网址")
 
 
 # ==================== 核心安装逻辑 ====================
@@ -229,7 +224,7 @@ def _do_zip_install(zip_url: str, temp_dir: Path, target: Path, ext_id: str) -> 
     update_task_status(ext_id, "installing", "文件解压完成", 80)
 
 
-def _run_bg_install(repo_url: str, ext_id: str, backup_url: str = ""):
+def _run_bg_install(repo_url: str, ext_id: str, github_proxy: str = ""):
     """后台安装任务"""
     update_task_status(ext_id, "installing", "正在准备安装...", 0)
     temp_dir = Path(tempfile.mkdtemp())
@@ -238,43 +233,20 @@ def _run_bg_install(repo_url: str, ext_id: str, backup_url: str = ""):
         target = Path(EXT_DIR) / ext_id
         target.parent.mkdir(parents=True, exist_ok=True)
         
-        update_task_status(ext_id, "installing", "检测网络环境...", 10)
+        update_task_status(ext_id, "installing", "解析仓库地址...", 10)
         
-        # 强制默认使用极狐 GitLab 同名镜像替换第三方备用地址 [1]
-        github_url, jihulab_urls = parse_repo_urls(repo_url)
-        
-        urls = []
-        github_connected = False
-        
-        # 3秒短暂测试 GitHub 连通性 [1]
-        try:
-            import httpx
-            with httpx.Client(timeout=3) as c:
-                c.head("https://github.com")
-            github_connected = True
-        except Exception:
-            github_connected = False
-        
-        # 根据连通性动态排列下载源顺序 [1]
-        if github_connected:
-            # 连通时：GitHub 优先，极狐 GitLab 同名备份源备用 [1]
-            if github_url:
-                urls.append(github_url)
-            urls.extend(jihulab_urls)
-        else:
-            # 阻塞时：极狐 GitLab 优先，GitHub 直连在最后尝试 [1]
-            urls.extend(jihulab_urls)
-            if github_url:
-                urls.append(github_url)
+        # 依据代理配置解析出最终需要尝试的 URL 列表
+        urls = parse_repo_urls(repo_url, github_proxy)
         
         if not urls:
             raise RuntimeError("没有可用的仓库地址")
         
         last_err = None
         for i, zip_url in enumerate(urls):
-            source_name = "GitHub 直连" if "github.com" in zip_url else "极狐 GitLab" if "jihulab.com" in zip_url else "备用源"
-            update_task_status(ext_id, "installing", f"正在从 {source_name} 下载 (尝试 {i+1}/{len(urls)})...", 20 + i * 20)
-            
+            is_proxied = github_proxy and zip_url.startswith(github_proxy)
+            source_name = "GitHub 代理" if is_proxied else "GitHub 直连"
+            update_task_status(ext_id, "installing", f"正在从 {source_name} 下载 (尝试 {i+1}/{len(urls)})...", 20 + i * 30)
+            print(f"尝试安装扩展 {ext_id}，源地址: {zip_url}")
             try:
                 _do_zip_install(zip_url, temp_dir, target, ext_id)
                 
@@ -419,7 +391,7 @@ async def delete_extension(ext_id: str):
 
 @router.post("/install-from-github", response_model=InstallResponse)
 async def install_from_github(req: GitHubInstallRequest, background: BackgroundTasks):
-    """从 GitHub/极狐 GitLab 安装扩展（动态网络测速分发，不依赖额外的备用仓库地址）"""
+    """从 GitHub 安装扩展（支持自定义 GitHub 代理网址，不依赖极狐 GitLab）"""
     try:
         ext_id = get_ext_id_from_url(req.url)
     except ValueError as e:
@@ -434,8 +406,8 @@ async def install_from_github(req: GitHubInstallRequest, background: BackgroundT
     if ext_id in install_tasks and install_tasks[ext_id]["status"] == "installing":
         return InstallResponse(ext_id=ext_id, status="installing", message="安装任务已在进行中")
     
-    # 统一屏蔽入参传入的 backupUrl，交由 parse_repo_urls 进行统一极狐 GitLab 闭环映射 [1]
-    background.add_task(_run_bg_install, req.url, ext_id, "")
+    # 后台线程拉取，传递前端传入的代理地址
+    background.add_task(_run_bg_install, req.url, ext_id, req.githubProxy or "")
     return InstallResponse(ext_id=ext_id, status="installing", message="后台安装任务已启动")
 
 
@@ -481,8 +453,8 @@ async def upload_zip(file: UploadFile = File(...), background: BackgroundTasks =
 
 
 @router.put("/{ext_id}/update")
-def update_extension(ext_id: str):
-    """更新扩展（智能连通性测速 + 极狐 GitLab 默认镜像映射）"""
+def update_extension(ext_id: str, github_proxy: Optional[str] = None):
+    """更新扩展（支持传入 GitHub 代理网址）"""
     target = Path(EXT_DIR) / ext_id
     if not target.exists():
         raise HTTPException(status_code=404, detail="扩展未安装")
@@ -500,29 +472,8 @@ def update_extension(ext_id: str):
     if not main_repo:
         raise HTTPException(status_code=400, detail="缺少 repository 信息")
     
-    # 强制将极狐 GitLab 设定为默认的 GitHub 镜像备用源，忽略外部 backupRepository 字段 [1]
-    github_url, jihulab_urls = parse_repo_urls(main_repo)
+    urls = parse_repo_urls(main_repo, github_proxy)
     
-    urls = []
-    github_connected = False
-    
-    # 3秒测试 GitHub 连通性 [1]
-    try:
-        with httpx.Client(timeout=3) as c:
-            c.head("https://github.com")
-        github_connected = True
-    except Exception:
-        github_connected = False
-        
-    if github_connected:
-        if github_url:
-            urls.append(github_url)
-        urls.extend(jihulab_urls)
-    else:
-        urls.extend(jihulab_urls)
-        if github_url:
-            urls.append(github_url)
-            
     temp_dir = Path(tempfile.mkdtemp())
     last_err = None
     
@@ -561,24 +512,43 @@ class RemotePluginList(BaseModel):
 @router.get("/remote-list", response_model=RemotePluginList)
 async def remote_plugin_list():
     """获取远程插件列表"""
+    # 1. GitHub Raw 链接（直连）
     github_raw = "https://raw.githubusercontent.com/super-agent-party/super-agent-party.github.io/main/plugins.json"
-    gitee_raw = "https://gitee.com/super-agent-party/super-agent-party.github.io/raw/main/plugins.json"
+    
+    # 2. 改用 Gitee 官方内容公开 API，规避 Raw 链接 302 强制登录的问题
+    gitee_api = "https://gitee.com/api/v5/repos/super-agent-party/super-agent-party.github.io/contents/plugins.json"
     
     remote = None
-    for url in (github_raw, gitee_raw):
+    
+    # 首先尝试从 GitHub 拉取
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as cli:
+            r = await cli.get(github_raw)
+            r.raise_for_status()
+            remote = r.json()
+    except Exception:
+        # GitHub 失败后，尝试从 Gitee API 拉取
         try:
-            async with httpx.AsyncClient(timeout=10) as cli:
-                r = await cli.get(url)
+            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as cli:
+                r = await cli.get(gitee_api)
                 r.raise_for_status()
-                remote = r.json()
-                break
-        except Exception:
-            if url == gitee_raw:
-                raise HTTPException(
-                    status_code=502,
-                    detail="无法获取远程插件列表"
-                )
-            continue
+                res_data = r.json()
+                
+                # Gitee API 接口返回的是 base64 编码的文件结构信息
+                if isinstance(res_data, dict) and res_data.get("encoding") == "base64":
+                    import base64
+                    encoded_content = res_data.get("content", "")
+                    # 过滤可能存在的换行符，并进行 base64 解码
+                    decoded_bytes = base64.b64decode(encoded_content.replace("\n", "").replace("\r", ""))
+                    remote = json.loads(decoded_bytes.decode('utf-8'))
+                else:
+                    remote = res_data
+        except Exception as e:
+            # 两个源均失效，抛出 502
+            raise HTTPException(
+                status_code=502,
+                detail=f"无法获取远程插件列表，GitHub 与 Gitee 均不可达: {str(e)}"
+            )
     
     try:
         local_res = await list_extensions()

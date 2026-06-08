@@ -21,7 +21,8 @@
       "network":"local",
       "proxy": "http://127.0.0.1:7890",
       "proxyMode": "system",
-      "isChinaProxy": false
+      "isChinaProxy": false,
+      "githubProxy": ""
     },
     "mainAgent":"super-model",
     "mcpServers": {},

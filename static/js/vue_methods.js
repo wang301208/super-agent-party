@@ -1202,31 +1202,76 @@ let vue_methods = {
     },
 
 
-    preprocessEntertainmentText(content) {
-      if (!content) return '';
-      
-      // 仅在娱乐模式下处理
-      if (this.systemSettings && this.systemSettings.chatMode === 'entertainment') {
-        // 利用现有的 splitCodeAndText，确保在转换单换行符时，绝不破坏代码块内部的排版
-        const parts = this.splitCodeAndText(content);
-        let inUnclosedCodeBlock = false;
+preprocessEntertainmentText(content) {
+  if (!content) return '';
 
-        return parts.map(part => {
-          if (part.type === 'code') {
-            inUnclosedCodeBlock = !part.closed;
-            return part.content;
-          } else if (inUnclosedCodeBlock) {
-            return part.content;
-          } else {
-            // 将普通文本中的单换行符转换为双换行符
-            return part.content.replace(/(?<!\n)\n(?!\n)/g, '\n\n');
-          }
-        }).join('');
+  let formatted = content;
+
+  // ============================================================
+  // 1. 强力图片隔离：匹配文本中的图片（支持 silence 标签包裹及各种空白符）
+  // 无论 AI 换行了几次、或者完全忘记换行，强行在其前后注入双换行符 (\n\n)
+  // ============================================================
+  formatted = formatted.replace(/(<silence>\s*)?(!\[.*?\]\([^\)]+\))(\s*<\/silence>)?/gi, '\n\n$1$2$3\n\n');
+
+  // ============================================================
+  // 2. 连续换行符压缩：收缩因强行注入或 AI 多次换行产生的冗余换行
+  // 确保最终 Markdown 编译时，各元素之间只有标准的一个空行
+  // ============================================================
+  formatted = formatted.replace(/\n{3,}/g, '\n\n');
+
+  // ============================================================
+  // 3. UI 标签净化：在渲染阶段彻底移除 <silence> 与 </silence>
+  // 避免其以纯文本或未知 HTML 标签的形式在气泡内残留，确保界面纯净
+  // ============================================================
+  formatted = formatted.replace(/<\/?silence>/gi, '');
+
+  // ============================================================
+  // 4. 娱乐模式智能换行：避开表格、列表、标题等排版结构，防止破坏 Markdown 渲染
+  // ============================================================
+  if (this.systemSettings && this.systemSettings.chatMode === 'entertainment') {
+    const lines = formatted.split('\n');
+    const processedLines = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      const currentLine = lines[i].trim();
+      const nextLine = (lines[i + 1] || '').trim();
+
+      processedLines.push(lines[i]);
+
+      if (i < lines.length - 1) {
+        // 判断是否属于表格行
+        const isCurrentTable = currentLine.includes('|');
+        const isNextTable = nextLine.includes('|');
+
+        // 判断是否是无序列表、有序列表或引用（如 `- `, `* `, `+ `, `1. `, `> `）
+        const structurePattern = /^([-*+>]|\d+\.)\s/;
+        const isCurrentStructure = structurePattern.test(currentLine);
+        const isNextStructure = structurePattern.test(nextLine);
+
+        // 判断是否是 Markdown 标题行
+        const headingPattern = /^#{1,6}\s/;
+        const isCurrentHeading = headingPattern.test(currentLine);
+        const isNextHeading = headingPattern.test(nextLine);
+
+        // 判断当前或下一行是否本身就是空行
+        const isCurrentEmpty = currentLine === '';
+        const isNextEmpty = nextLine === '';
+
+        if (!isCurrentTable && !isNextTable && 
+            !isCurrentStructure && !isNextStructure && 
+            !isCurrentHeading && !isNextHeading &&
+            !isCurrentEmpty && !isNextEmpty) {
+          processedLines.push('');
+        }
       }
-      return content;
-    },
+    }
+    formatted = processedLines.join('\n');
+  }
 
-    formatMessage(content, index) {
+  return formatted;
+},
+
+formatMessage(content, index) {
       if (!content) return '';
 
       let processedForRender = content.trimEnd(); 
@@ -1252,10 +1297,48 @@ let vue_methods = {
           let formatted = part.content;
 
           // ============================================================
-          // 娱乐模式下：单换行符（\n）转换为双换行符（\n\n）
+          // 娱乐模式下：智能单换行符（\n）转换为双换行符（\n\n）
+          // 避开表格、列表、标题、引用等结构，防止破坏排版
           // ============================================================
           if (this.systemSettings && this.systemSettings.chatMode === 'entertainment') {
-            formatted = formatted.replace(/(?<!\n)\n(?!\n)/g, '\n\n');
+            const linesList = formatted.split('\n');
+            const processedLines = [];
+            
+            for (let i = 0; i < linesList.length; i++) {
+              const currentLine = linesList[i].trim();
+              const nextLine = (linesList[i + 1] || '').trim();
+
+              processedLines.push(linesList[i]);
+
+              if (i < linesList.length - 1) {
+                // 1. 判断是否属于表格行（包含 | 符号）
+                const isCurrentTable = currentLine.includes('|');
+                const isNextTable = nextLine.includes('|');
+
+                // 2. 判断是否是无序列表、有序列表或引用（如 `- `, `* `, `+ `, `1. `, `> `）
+                const structurePattern = /^([-*+>]|\d+\.)\s/;
+                const isCurrentStructure = structurePattern.test(currentLine);
+                const isNextStructure = structurePattern.test(nextLine);
+
+                // 3. 判断是否是 Markdown 标题行（# ）
+                const headingPattern = /^#{1,6}\s/;
+                const isCurrentHeading = headingPattern.test(currentLine);
+                const isNextHeading = headingPattern.test(nextLine);
+
+                // 4. 判断当前或下一行是否本身就是空行（避免产生过大空白）
+                const isCurrentEmpty = currentLine === '';
+                const isNextEmpty = nextLine === '';
+
+                // 只有当当前行和下一行都不是上述排版结构时，才进行双换行处理
+                if (!isCurrentTable && !isNextTable && 
+                    !isCurrentStructure && !isNextStructure && 
+                    !isCurrentHeading && !isNextHeading &&
+                    !isCurrentEmpty && !isNextEmpty) {
+                  processedLines.push('');
+                }
+              }
+            }
+            formatted = processedLines.join('\n');
           }
 
           // ============================================================
@@ -1278,7 +1361,7 @@ let vue_methods = {
           // LaTeX 公式保护机制
           // 防止公式内部的 < 和 > 被后续的 HTML 标签过滤正则误杀
           // ============================================================
-          formatted = formatted.replace(/\$\$([\s\S]*?)(?:\$\$|$)|\$([^\$\n]+)\$/g, function(match) {
+          formatted = formatted.replace(/\s\s([\s\S]*?)(?:\s\s|$)|\$([^\$\n]+)\$/g, function(match) {
             return match.replace(/</g, '\\lt ').replace(/>/g, '\\gt ');
           });
 
@@ -3132,7 +3215,8 @@ let vue_methods = {
 
             // 清空 content 字段（不再需要 HTML）
             if (currentMsg) {
-                currentMsg.content = '';
+                currentMsg.generationFinished = true; 
+                currentMsg.content = ''; // 清空 content 字段
             }
 
             // 消息去重和保存
@@ -8142,6 +8226,73 @@ handleCreateSlackSeparator(val) {
       }
     },
 
+
+    // 触发背景图文件选择框
+    triggerBgUpload() {
+      if (this.$refs.bgImageInput) {
+        this.$refs.bgImageInput.click();
+      }
+    },
+
+    // 处理背景图文件上传
+    async handleBgUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // 重置 input value，防止选择相同文件时不触发 change 事件
+      event.target.value = '';
+
+      const formData = new FormData();
+      // 'files' 字段需与后端 @app.post("/load_file") 中一致
+      formData.append('files', file, file.name);
+
+      try {
+        const response = await fetch('/load_file', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        
+        if (data.success && data.fileLinks && data.fileLinks.length > 0) {
+          // 获取后端返回的完整 URL 路径并赋值给 backgroundURL
+          const uploadedUrl = data.fileLinks[0].path;
+          this.systemSettings.backgroundURL = uploadedUrl;
+          
+          // 自动保存配置
+          if (typeof this.autoSaveSettings === 'function') {
+            this.autoSaveSettings();
+          }
+          
+          if (typeof showNotification === 'function') {
+            showNotification(this.t('uploadSuccess') || 'Upload successful', 'success');
+          } else if (this.$message) {
+            this.$message.success(this.t('uploadSuccess') || 'Upload successful');
+          }
+        } else {
+          if (typeof showNotification === 'function') {
+            showNotification(this.t('uploadFailed') || 'Upload failed', 'error');
+          } else if (this.$message) {
+            this.$message.error(this.t('uploadFailed') || 'Upload failed');
+          }
+        }
+      } catch (error) {
+        console.error('Background upload error:', error);
+        if (typeof showNotification === 'function') {
+          showNotification(error.message || 'Upload error', 'error');
+        } else if (this.$message) {
+          this.$message.error(error.message || 'Upload error');
+        }
+      }
+    },
+
+    clearBgImage() {
+      this.systemSettings.backgroundURL = '';
+      if (typeof this.autoSaveSettings === 'function') {
+        this.autoSaveSettings();
+      }
+    },
+
     handleFileUpload(file) {
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -9213,8 +9364,8 @@ handleCreateSlackSeparator(val) {
       }
       await this.autoSaveSettings();
     },
-    /**
-     * 按分隔符 + <voice> 标签 拆分 buffer
+/**
+     * 按分隔符 + <voice> 标签 拆分 buffer (终极防漏、防换行抖动版)
      * @returns {
      *   chunks: string[]        // 纯文本块（已去标签、已清理）
      *   chunks_voice: string[]  // 与 chunks 一一对应的声音 key
@@ -9223,33 +9374,54 @@ handleCreateSlackSeparator(val) {
      * }
      */
     splitTTSBuffer(buffer) {
-        // 0. 基础清理逻辑 (保持不变)
+        // ============================================================
+        // 🌟 核心优化 1：一进来就以最优先级、最彻底地干掉所有的 Markdown 图片
+        // 使用 [\s\S] 替代 . ，防止流式文本中因换行符或特殊格式导致正则匹配失败而残留图片 alt 文本
+        // 这一步运行后，无论是在 <silence> 内部还是外部，"开心" 等 alt 文本都将直接被安全抹除
+        // ============================================================
+        buffer = buffer.replace(/!\[[\s\S]*?\]\([\s\S]*?\)/g, '');
+
+        // 1. 初始化栈和允许的音色列表
+        if (!this.voiceStack) this.voiceStack = ['default'];
+        const voiceKeys = ['default', 'silence', ...Object.keys(this.ttsSettings.newtts || {})].filter(Boolean);
+
+        // ============================================================
+        // 🌟 核心优化 2：意外情况防噪兜底
+        // ============================================================
+        
+        // A. 自动识别未隔离的网页链接/原始 URL，将其无缝包裹在 <silence> 标签中
+        buffer = buffer.replace(/(<silence>[\s\S]*?<\/silence>)|(https?:\/\/[^\s]+?(?=[,.:;!?。，：；？！]*?(?:\s|$)))/gi, (match, silence, url) => {
+            if (silence) return silence; 
+            return `<silence>${url}</silence>`;
+        });
+
+        // B. 清理/静音非音色定义的其他 HTML 标签 (如 <button>, <img ...>)，防止 TTS 念出 HTML 源码
+        const voiceTagsPattern = `\\/?(?:${voiceKeys.join('|')})\\b`;
+        const htmlTagRe = new RegExp(`<(?!(?:${voiceTagsPattern}))[^>]+>`, 'gi');
+        buffer = buffer.replace(htmlTagRe, '');
+
+        // 2. 基础清理逻辑 (此时图片已被彻底过滤，在此处安全清理常规超链接，支持多行 [文本](url))
         buffer = buffer
             .replace(/#{1,6}\s/gm, '')
             .replace(/[*~`]+/g, '')
             .replace(/^\s*[-*]\s/gm, '')
             .replace(/[\u{2600}-\u{27BF}\u{2700}-\u{27BF}\u{1F300}-\u{1F9FF}]/gu, '')
             .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
-            .replace(/!\[.*?\]\(.*?\)/g, '')
-            .replace(/\[(.*?)\]\(.*?\)/g, '$1');
+            .replace(/\[([\s\S]*?)\]\([\s\S]*?\)/g, '$1'); // 仅提取文本链接的展示文字
 
         if (!buffer) {
             return {
                 chunks: [],
                 chunks_voice: [],
                 remaining: '',
-                remaining_voice: this.voiceStack[this.voiceStack.length - 1] // 返回栈顶
+                remaining_voice: this.voiceStack[this.voiceStack.length - 1]
             };
         }
 
-        // 1. 初始化栈（防御性）
-        if (!this.voiceStack) this.voiceStack = ['default'];
-
-        // 2. 构造正则
+        // 2. 构造正则 (保持原有逻辑不变)
         const separators = (this.ttsSettings.separators || [])
             .map(s => s.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\r/g, '\r'));
 
-        const voiceKeys = ['default', 'silence', ...Object.keys(this.ttsSettings.newtts || {})].filter(Boolean);
         const openTagRe = new RegExp(`<(${voiceKeys.join('|')})>`, 'gi');
         const closeTagRe = /<\/\w+>/gi; // 匹配任何结束标签
         const sepRe = separators.length
@@ -9280,7 +9452,6 @@ handleCreateSlackSeparator(val) {
             const cleaned = text.replace(/\s+/g, ' ').trim();
             if (cleaned && !/^[\s\p{P}]*$/u.test(cleaned)) {
                 chunks.push(cleaned);
-                // 关键：永远使用当前栈顶的音色
                 chunks_voice.push(this.voiceStack[this.voiceStack.length - 1]);
             }
         };
@@ -9308,7 +9479,6 @@ handleCreateSlackSeparator(val) {
 
         // 5. 剩余文本
         const remaining = buffer.slice(segmentStart);
-        // 告知外部当前处于什么音色状态（栈顶）
         const remaining_voice = this.voiceStack[this.voiceStack.length - 1];
 
         return { chunks, chunks_voice, remaining, remaining_voice };
@@ -9384,9 +9554,15 @@ handleCreateSlackSeparator(val) {
           }
         }
         
+        if (lastMessage.generationFinished && 
+            nextIndex >= lastMessage.ttsChunks.length && 
+            lastMessage.ttsQueue.size === 0) {
+            break; // 所有文本已下发，所有音频块已请求完毕，当前消息的 TTS 进程完美完成并安全退出
+        }
+
         await new Promise(resolve => setTimeout(resolve, 10));
       }
-      this.messages[this.messages.length - 1].currentChunk = 0;
+      // this.messages[this.messages.length - 1].currentChunk = 0;
       console.log('TTS queue processing completed');
     },
     startTimer() {
@@ -9500,21 +9676,28 @@ handleCreateSlackSeparator(val) {
             const allLocalChunksPlayed = currentIndex >= (lastMessage.ttsChunks?.length || 0);
             
             if (allLocalChunksPlayed) {
-                // 如果生成已结束，或者已经等了很久（比如5秒）都没新内容，就强行结束
+                // 判断当前正在播放的消息，是不是对话列表里的最后一条最新消息
+                const isLatestMessage = this.messages.length > 0 && 
+                                      this.messages[this.messages.length - 1] === lastMessage;
+
                 if (lastMessage.generationFinished) {
                     console.log("播放全部完成，正常退出");
-                    this.TTSrunning = false;
+                    // --- 核心修复 2：只有自己是最新消息时，才去关闭全局 TTS 开关 ---
+                    if (isLatestMessage) {
+                        this.TTSrunning = false; 
+                    }
                     try { fetch('/api/overlay/danmaku/clear', { method: 'POST' }).catch(()=>{}); } catch(e){}
                     if (resolve) resolve();
                     return;
                 } else {
-                    // 如果生成还没标记结束，但已经没东西播了，我们再等一下
-                    // 增加一个保险计数器（可选）或者直接检查是否还在生成
                     if (!this.isSending) { 
-                        // 如果连网络请求都结束了，还没标记 finish，那肯定是状态出错了
                         console.warn("检测到生成已停止但未标记完成，强行释放锁");
-                        lastMessage.generationFinished = true; // 补救状态
-                        this.TTSrunning = false;
+                        lastMessage.generationFinished = true; 
+                        
+                        // --- 同上，加一层保护 ---
+                        if (isLatestMessage) {
+                            this.TTSrunning = false; 
+                        }
                         try { fetch('/api/overlay/danmaku/clear', { method: 'POST' }).catch(()=>{}); } catch(e){}
                         if (resolve) resolve();
                         return;
@@ -14051,63 +14234,65 @@ clearSegments() {
         
       }
     },
-async togglePlugin(plugin) {
-    if (plugin.installed) {
-      // 卸载逻辑保持不变...
-      await this.removeExtension(plugin);
-      plugin.installed = false;
-    } else {
-      // --- 安装逻辑 ---
-      
-      // 1. 设置局部 loading 状态 (如果你的 plugin 对象支持)
-      // 如果没有局部 loading，就用全局 this.installLoading = true
-      plugin.installing = true
-      this.installLoading = true; 
-
-      try {
-        const res = await fetch('/api/extensions/install-from-github', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            url: plugin.repository,
-            backupUrl: plugin.backupRepository || "" 
-          }),
-        });
-
-        if (res.status === 409) throw new Error('插件已存在');
-        if (!res.ok) throw new Error('请求失败');
+    async togglePlugin(plugin) {
+      if (plugin.installed) {
+        // 卸载逻辑保持不变...
+        await this.removeExtension(plugin);
+        plugin.installed = false;
+      } else {
+        // --- 安装逻辑 ---
         
-        const resData = await res.json();
-        const extId = resData.ext_id;
+        // 1. 设置局部 loading 状态
+        plugin.installing = true;
+        this.installLoading = true; 
 
-        showNotification('已开始下载，请耐心等待...', 'info');
+        try {
+          // 获取用户设置的 GitHub 仓库代理网址
+          const githubProxy = this.systemSettings.githubProxy || "";
 
-        // --- 核心修改：开始轮询 ---
-        this.pollInstallStatus(
-          extId,
-          (msg) => {
-            // 成功
-            this.installLoading = false;
-            if (plugin) plugin.installing = false;
-            plugin.installed = true; // 更新前端状态
-            showNotification('安装成功！', 'success');
-            this.scanExtensions(); // 刷新完整列表以确保数据一致
-          },
-          (errMsg) => {
-            // 失败
-            this.installLoading = false;
-            if (plugin) plugin.installing = false;
-            showNotification(`安装失败: ${errMsg}`, 'error');
-          }
-        );
+          const res = await fetch('/api/extensions/install-from-github', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              url: plugin.repository,
+              githubProxy: githubProxy // 使用用户自定义代理，不使用旧 backupRepository 
+            }),
+          });
 
-      } catch (e) {
-        this.installLoading = false;
-        if (plugin) plugin.installing = false;
-        showNotification(e.message, 'error');
+          if (res.status === 409) throw new Error('插件已存在');
+          if (!res.ok) throw new Error('请求失败');
+          
+          const resData = await res.json();
+          const extId = resData.ext_id;
+
+          showNotification('已开始下载，请耐心等待...', 'info');
+
+          // --- 核心修改：开始轮询 ---
+          this.pollInstallStatus(
+            extId,
+            (msg) => {
+              // 成功
+              this.installLoading = false;
+              if (plugin) plugin.installing = false;
+              plugin.installed = true; // 更新前端状态
+              showNotification('安装成功！', 'success');
+              this.scanExtensions(); // 刷新完整列表以确保数据一致
+            },
+            (errMsg) => {
+              // 失败
+              this.installLoading = false;
+              if (plugin) plugin.installing = false;
+              showNotification(`安装失败: ${errMsg}`, 'error');
+            }
+          );
+
+        } catch (e) {
+          this.installLoading = false;
+          if (plugin) plugin.installing = false;
+          showNotification(e.message, 'error');
+        }
       }
-    }
-  },
+    },
   handleRefreshClick() {
     this.refreshing = true;
     
