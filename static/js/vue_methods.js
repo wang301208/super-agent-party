@@ -9467,6 +9467,7 @@ handleCreateSlackSeparator(val) {
       const lastMessage = message;
       lastMessage.currentChunk = lastMessage.currentChunk || 0;
       lastMessage.isPlaying = false;
+      lastMessage.audioAborted = false; // --- 核心修复 5：新队列启动时重置中断标记 ---
       
       this.audioPlayQueue = [];
       console.log('Audio playback monitor started for:', message.agentName);
@@ -9476,7 +9477,13 @@ handleCreateSlackSeparator(val) {
     },
 
     async checkAudioPlayback(message, resolve) {
-        if (!message) { if(resolve) resolve(); return; }
+       // --- 核心修复 3：检查是否被打断，如果打断则直接终止递归 ---
+        if (!message || message.audioAborted) { 
+            if (message) message.isPlaying = false;
+            if (resolve) resolve(); 
+            return; 
+        }
+        
         const lastMessage = message;
 
         if (lastMessage.isPlaying) {
@@ -9584,23 +9591,30 @@ handleCreateSlackSeparator(val) {
                     });
                 }
                 
-                // 等待当前这段音频播完（无论是有声还是静音）
+                // 等待当前这段音频播完
                 await new Promise((r) => {
                     this.currentAudio.onended = r;
-                    this.currentAudio.onerror = r; // 报错也要释放
+                    this.currentAudio.onerror = r; 
                     this.currentAudio.play().catch(e => {
                         console.error("播放失败", e);
-                        r(); // 拦截也要释放
+                        r(); 
                     });
-                    setTimeout(r, 20000); // 20秒强制跳过单个块，防止卡死
+                    setTimeout(r, 20000); 
                 });
                 
             } catch (error) {
                 console.error(`Playback error: ${error}`);
             } finally {
-                lastMessage.currentChunk++;
                 lastMessage.isPlaying = false;
-                // 只有当前音频（弹幕）彻底 onended 之后，才会递归触发下一条（AI回复）
+                
+                // --- 核心修复 4：音频结束后再次检查是否被手动打断/切歌 ---
+                if (lastMessage.audioAborted) {
+                    if (resolve) resolve();
+                    return; // 彻底终止该消息的播放队列，不要再 setTimeout 了！
+                }
+                
+                lastMessage.currentChunk++;
+                // 只有当前音频彻底 onended 之后，才会递归触发下一条
                 setTimeout(() => this.checkAudioPlayback(message, resolve), 0);
             }
         }
@@ -9639,20 +9653,19 @@ handleCreateSlackSeparator(val) {
         if (message.isOmni) {
           // --- Omni 逻辑保持不变 ---
           if ((message.omniCurrentTime || 0) >= (message.omniDuration || 0) - 0.1) {
-            console.log('Omni audio at end, restarting from beginning');
             message.omniCurrentTime = 0; 
           }
           message.isPlaying = true;
           this.playOmniFromTime(message, message.omniCurrentTime);
         } else {
           // --- 普通 TTS 逻辑：统一复用流式播放函数 ---
-          message.isPlaying = false; // 先设为false，让 checkAudioPlayback 去接管并设为 true
-          message.currentChunk = 0;  // 从头开始播放
+          message.isPlaying = false; 
+          message.audioAborted = false; // --- 核心修复 6：用户手动恢复播放时，重置中断标记 ---
           
-          // 确保 generationFinished 为 true，因为这是历史消息回放
+          // 如果想让用户暂停后从头播，保留这行：
+          message.currentChunk = 0;  
+          
           message.generationFinished = true; 
-          
-          // 直接调用核心音频队列监控函数
           this.checkAudioPlayback(message);
         }
       }
@@ -9693,40 +9706,44 @@ handleCreateSlackSeparator(val) {
 
     // 停止所有正在播放的音频
     stopAllAudioPlayback() {
+      // --- 核心修复 1：给所有消息打上“终止循环”的标记 ---
+      this.messages.forEach(message => {
+        message.audioAborted = true; 
+        message.isPlaying = false;
+      });
+
       // 1. 停止 HTML5 Audio (普通 TTS)
       if (this.currentAudio) {
         this.currentAudio.pause();
+        // --- 核心修复 2：手动触发 onended，让 checkAudioPlayback 中的 await Promise 立即放行 ---
+        if (typeof this.currentAudio.onended === 'function') {
+          this.currentAudio.onended(); 
+        }
         this.currentAudio = null;
       }
       
       // 2. 停止阅读音频
       if (this.currentReadAudio) {
         this.currentReadAudio.pause();
+        if (typeof this.currentReadAudio.onended === 'function') {
+          this.currentReadAudio.onended();
+        }
         this.currentReadAudio = null;
       }
       
       // 3. 【核心修复】停止所有 Web Audio API 的 Omni 节点
       if (this.activeSources && this.activeSources.length > 0) {
         this.activeSources.forEach(src => {
-          // ✨ 新增：给节点打上被强杀的标记，防止 onended 扰乱进度条
           src.isForceStopped = true; 
           try {
             src.stop(); // 立即停止播放
-          } catch (e) {
-            // 忽略已经停止或未开始的错误
-          }
+          } catch (e) {}
         });
-        // 清空数组
         this.activeSources = [];
       }
       
-      this.isOmniPlaying = false; // ✨ 新增：重置全局播放状态
+      this.isOmniPlaying = false; 
       this.audioStartTime = 0; 
-      
-      // 4. 重置所有消息状态
-      this.messages.forEach(message => {
-        message.isPlaying = false;
-      });
 
       // 6. 发送停止信号到VRM
       this.sendTTSStatusToVRM('stopSpeaking', {});
