@@ -1202,31 +1202,76 @@ let vue_methods = {
     },
 
 
-    preprocessEntertainmentText(content) {
-      if (!content) return '';
-      
-      // 仅在娱乐模式下处理
-      if (this.systemSettings && this.systemSettings.chatMode === 'entertainment') {
-        // 利用现有的 splitCodeAndText，确保在转换单换行符时，绝不破坏代码块内部的排版
-        const parts = this.splitCodeAndText(content);
-        let inUnclosedCodeBlock = false;
+preprocessEntertainmentText(content) {
+  if (!content) return '';
 
-        return parts.map(part => {
-          if (part.type === 'code') {
-            inUnclosedCodeBlock = !part.closed;
-            return part.content;
-          } else if (inUnclosedCodeBlock) {
-            return part.content;
-          } else {
-            // 将普通文本中的单换行符转换为双换行符
-            return part.content.replace(/(?<!\n)\n(?!\n)/g, '\n\n');
-          }
-        }).join('');
+  let formatted = content;
+
+  // ============================================================
+  // 1. 强力图片隔离：匹配文本中的图片（支持 silence 标签包裹及各种空白符）
+  // 无论 AI 换行了几次、或者完全忘记换行，强行在其前后注入双换行符 (\n\n)
+  // ============================================================
+  formatted = formatted.replace(/(<silence>\s*)?(!\[.*?\]\([^\)]+\))(\s*<\/silence>)?/gi, '\n\n$1$2$3\n\n');
+
+  // ============================================================
+  // 2. 连续换行符压缩：收缩因强行注入或 AI 多次换行产生的冗余换行
+  // 确保最终 Markdown 编译时，各元素之间只有标准的一个空行
+  // ============================================================
+  formatted = formatted.replace(/\n{3,}/g, '\n\n');
+
+  // ============================================================
+  // 3. UI 标签净化：在渲染阶段彻底移除 <silence> 与 </silence>
+  // 避免其以纯文本或未知 HTML 标签的形式在气泡内残留，确保界面纯净
+  // ============================================================
+  formatted = formatted.replace(/<\/?silence>/gi, '');
+
+  // ============================================================
+  // 4. 娱乐模式智能换行：避开表格、列表、标题等排版结构，防止破坏 Markdown 渲染
+  // ============================================================
+  if (this.systemSettings && this.systemSettings.chatMode === 'entertainment') {
+    const lines = formatted.split('\n');
+    const processedLines = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      const currentLine = lines[i].trim();
+      const nextLine = (lines[i + 1] || '').trim();
+
+      processedLines.push(lines[i]);
+
+      if (i < lines.length - 1) {
+        // 判断是否属于表格行
+        const isCurrentTable = currentLine.includes('|');
+        const isNextTable = nextLine.includes('|');
+
+        // 判断是否是无序列表、有序列表或引用（如 `- `, `* `, `+ `, `1. `, `> `）
+        const structurePattern = /^([-*+>]|\d+\.)\s/;
+        const isCurrentStructure = structurePattern.test(currentLine);
+        const isNextStructure = structurePattern.test(nextLine);
+
+        // 判断是否是 Markdown 标题行
+        const headingPattern = /^#{1,6}\s/;
+        const isCurrentHeading = headingPattern.test(currentLine);
+        const isNextHeading = headingPattern.test(nextLine);
+
+        // 判断当前或下一行是否本身就是空行
+        const isCurrentEmpty = currentLine === '';
+        const isNextEmpty = nextLine === '';
+
+        if (!isCurrentTable && !isNextTable && 
+            !isCurrentStructure && !isNextStructure && 
+            !isCurrentHeading && !isNextHeading &&
+            !isCurrentEmpty && !isNextEmpty) {
+          processedLines.push('');
+        }
       }
-      return content;
-    },
+    }
+    formatted = processedLines.join('\n');
+  }
 
-    formatMessage(content, index) {
+  return formatted;
+},
+
+formatMessage(content, index) {
       if (!content) return '';
 
       let processedForRender = content.trimEnd(); 
@@ -1252,10 +1297,48 @@ let vue_methods = {
           let formatted = part.content;
 
           // ============================================================
-          // 娱乐模式下：单换行符（\n）转换为双换行符（\n\n）
+          // 娱乐模式下：智能单换行符（\n）转换为双换行符（\n\n）
+          // 避开表格、列表、标题、引用等结构，防止破坏排版
           // ============================================================
           if (this.systemSettings && this.systemSettings.chatMode === 'entertainment') {
-            formatted = formatted.replace(/(?<!\n)\n(?!\n)/g, '\n\n');
+            const linesList = formatted.split('\n');
+            const processedLines = [];
+            
+            for (let i = 0; i < linesList.length; i++) {
+              const currentLine = linesList[i].trim();
+              const nextLine = (linesList[i + 1] || '').trim();
+
+              processedLines.push(linesList[i]);
+
+              if (i < linesList.length - 1) {
+                // 1. 判断是否属于表格行（包含 | 符号）
+                const isCurrentTable = currentLine.includes('|');
+                const isNextTable = nextLine.includes('|');
+
+                // 2. 判断是否是无序列表、有序列表或引用（如 `- `, `* `, `+ `, `1. `, `> `）
+                const structurePattern = /^([-*+>]|\d+\.)\s/;
+                const isCurrentStructure = structurePattern.test(currentLine);
+                const isNextStructure = structurePattern.test(nextLine);
+
+                // 3. 判断是否是 Markdown 标题行（# ）
+                const headingPattern = /^#{1,6}\s/;
+                const isCurrentHeading = headingPattern.test(currentLine);
+                const isNextHeading = headingPattern.test(nextLine);
+
+                // 4. 判断当前或下一行是否本身就是空行（避免产生过大空白）
+                const isCurrentEmpty = currentLine === '';
+                const isNextEmpty = nextLine === '';
+
+                // 只有当当前行和下一行都不是上述排版结构时，才进行双换行处理
+                if (!isCurrentTable && !isNextTable && 
+                    !isCurrentStructure && !isNextStructure && 
+                    !isCurrentHeading && !isNextHeading &&
+                    !isCurrentEmpty && !isNextEmpty) {
+                  processedLines.push('');
+                }
+              }
+            }
+            formatted = processedLines.join('\n');
           }
 
           // ============================================================
@@ -1278,7 +1361,7 @@ let vue_methods = {
           // LaTeX 公式保护机制
           // 防止公式内部的 < 和 > 被后续的 HTML 标签过滤正则误杀
           // ============================================================
-          formatted = formatted.replace(/\$\$([\s\S]*?)(?:\$\$|$)|\$([^\$\n]+)\$/g, function(match) {
+          formatted = formatted.replace(/\s\s([\s\S]*?)(?:\s\s|$)|\$([^\$\n]+)\$/g, function(match) {
             return match.replace(/</g, '\\lt ').replace(/>/g, '\\gt ');
           });
 
@@ -8143,6 +8226,73 @@ handleCreateSlackSeparator(val) {
       }
     },
 
+
+    // 触发背景图文件选择框
+    triggerBgUpload() {
+      if (this.$refs.bgImageInput) {
+        this.$refs.bgImageInput.click();
+      }
+    },
+
+    // 处理背景图文件上传
+    async handleBgUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // 重置 input value，防止选择相同文件时不触发 change 事件
+      event.target.value = '';
+
+      const formData = new FormData();
+      // 'files' 字段需与后端 @app.post("/load_file") 中一致
+      formData.append('files', file, file.name);
+
+      try {
+        const response = await fetch('/load_file', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        
+        if (data.success && data.fileLinks && data.fileLinks.length > 0) {
+          // 获取后端返回的完整 URL 路径并赋值给 backgroundURL
+          const uploadedUrl = data.fileLinks[0].path;
+          this.systemSettings.backgroundURL = uploadedUrl;
+          
+          // 自动保存配置
+          if (typeof this.autoSaveSettings === 'function') {
+            this.autoSaveSettings();
+          }
+          
+          if (typeof showNotification === 'function') {
+            showNotification(this.t('uploadSuccess') || 'Upload successful', 'success');
+          } else if (this.$message) {
+            this.$message.success(this.t('uploadSuccess') || 'Upload successful');
+          }
+        } else {
+          if (typeof showNotification === 'function') {
+            showNotification(this.t('uploadFailed') || 'Upload failed', 'error');
+          } else if (this.$message) {
+            this.$message.error(this.t('uploadFailed') || 'Upload failed');
+          }
+        }
+      } catch (error) {
+        console.error('Background upload error:', error);
+        if (typeof showNotification === 'function') {
+          showNotification(error.message || 'Upload error', 'error');
+        } else if (this.$message) {
+          this.$message.error(error.message || 'Upload error');
+        }
+      }
+    },
+
+    clearBgImage() {
+      this.systemSettings.backgroundURL = '';
+      if (typeof this.autoSaveSettings === 'function') {
+        this.autoSaveSettings();
+      }
+    },
+
     handleFileUpload(file) {
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -9393,7 +9543,7 @@ handleCreateSlackSeparator(val) {
 
         await new Promise(resolve => setTimeout(resolve, 10));
       }
-      this.messages[this.messages.length - 1].currentChunk = 0;
+      // this.messages[this.messages.length - 1].currentChunk = 0;
       console.log('TTS queue processing completed');
     },
     startTimer() {

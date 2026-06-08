@@ -813,15 +813,25 @@ function updateElement(el, rawMarkdown, formatFn) {
         </div>
 
         <!-- 聊天界面保持不变 -->
-        <div v-show="activeMenu === 'home'" class="page chat-container">
-        <!-- 最外层 wrapper，负责整体左右布局 -->
-        <div class="chat-wrapper" 
-            ref="chatWrapperRef"
-            :class="{ 
-              'collapsed-right': !sidePanelOpen, 
-              'collapsed-left': !chatAreaOpen,
-              'resizing': isResizing
-            }">
+        <div 
+          v-show="activeMenu === 'home'" 
+          class="page chat-container"
+          :class="{ 'has-custom-bg': !!systemSettings.backgroundURL }"
+          :style="systemSettings.backgroundURL ? { 
+            backgroundImage: 'url(' + systemSettings.backgroundURL + ')', 
+            backgroundSize: 'cover', 
+            backgroundPosition: 'center center', 
+            backgroundRepeat: 'no-repeat'
+          } : {}"
+        >
+          <!-- 最外层 wrapper，负责整体左右布局 -->
+          <div class="chat-wrapper" 
+              ref="chatWrapperRef"
+              :class="{ 
+                'collapsed-right': !sidePanelOpen, 
+                'collapsed-left': !chatAreaOpen,
+                'resizing': isResizing
+              }">
           
           <!-- 对话历史二级侧边栏 (保持用户原有结构) -->
           <div class="chat-history-sidebar" v-show="showHistorySidebar && !isMobile && !isCapsuleMode">

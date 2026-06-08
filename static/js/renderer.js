@@ -1065,6 +1065,24 @@ const app = Vue.createApp({
 
   },
   watch: {
+
+    // 监听背景图变化，全局提升至 body 层
+    'systemSettings.backgroundURL': {
+      handler(newUrl) {
+        if (newUrl) {
+          document.body.style.backgroundImage = `url(${newUrl})`;
+          document.body.style.backgroundSize = 'cover';
+          document.body.style.backgroundPosition = 'center center';
+          document.body.style.backgroundAttachment = 'fixed'; // 固定背景，滚动时不跟着跑
+          document.body.classList.add('has-custom-bg'); // 给 body 打上标签，激活毛玻璃 CSS
+        } else {
+          document.body.style.backgroundImage = '';
+          document.body.classList.remove('has-custom-bg');
+        }
+      },
+      immediate: true // 组件加载时立刻执行一次
+    },
+
     'CLISettings.cc_path': {
       handler(newPath) {
         if (newPath) {
