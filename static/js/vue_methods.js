@@ -3132,7 +3132,8 @@ let vue_methods = {
 
             // 清空 content 字段（不再需要 HTML）
             if (currentMsg) {
-                currentMsg.content = '';
+                currentMsg.generationFinished = true; 
+                currentMsg.content = ''; // 清空 content 字段
             }
 
             // 消息去重和保存
@@ -9384,6 +9385,12 @@ handleCreateSlackSeparator(val) {
           }
         }
         
+        if (lastMessage.generationFinished && 
+            nextIndex >= lastMessage.ttsChunks.length && 
+            lastMessage.ttsQueue.size === 0) {
+            break; // 所有文本已下发，所有音频块已请求完毕，当前消息的 TTS 进程完美完成并安全退出
+        }
+
         await new Promise(resolve => setTimeout(resolve, 10));
       }
       this.messages[this.messages.length - 1].currentChunk = 0;
@@ -9500,21 +9507,28 @@ handleCreateSlackSeparator(val) {
             const allLocalChunksPlayed = currentIndex >= (lastMessage.ttsChunks?.length || 0);
             
             if (allLocalChunksPlayed) {
-                // 如果生成已结束，或者已经等了很久（比如5秒）都没新内容，就强行结束
+                // 判断当前正在播放的消息，是不是对话列表里的最后一条最新消息
+                const isLatestMessage = this.messages.length > 0 && 
+                                      this.messages[this.messages.length - 1] === lastMessage;
+
                 if (lastMessage.generationFinished) {
                     console.log("播放全部完成，正常退出");
-                    this.TTSrunning = false;
+                    // --- 核心修复 2：只有自己是最新消息时，才去关闭全局 TTS 开关 ---
+                    if (isLatestMessage) {
+                        this.TTSrunning = false; 
+                    }
                     try { fetch('/api/overlay/danmaku/clear', { method: 'POST' }).catch(()=>{}); } catch(e){}
                     if (resolve) resolve();
                     return;
                 } else {
-                    // 如果生成还没标记结束，但已经没东西播了，我们再等一下
-                    // 增加一个保险计数器（可选）或者直接检查是否还在生成
                     if (!this.isSending) { 
-                        // 如果连网络请求都结束了，还没标记 finish，那肯定是状态出错了
                         console.warn("检测到生成已停止但未标记完成，强行释放锁");
-                        lastMessage.generationFinished = true; // 补救状态
-                        this.TTSrunning = false;
+                        lastMessage.generationFinished = true; 
+                        
+                        // --- 同上，加一层保护 ---
+                        if (isLatestMessage) {
+                            this.TTSrunning = false; 
+                        }
                         try { fetch('/api/overlay/danmaku/clear', { method: 'POST' }).catch(()=>{}); } catch(e){}
                         if (resolve) resolve();
                         return;
