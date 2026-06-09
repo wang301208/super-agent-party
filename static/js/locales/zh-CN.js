@@ -717,7 +717,7 @@ window.lang_zhCN = {
         'wikipedia': '维基百科',
         'wikipediaNotice': '获取指定关键词的维基百科摘要或具体章节内容',
         'hideToolResults': '隐藏工具调用结果',
-        'hideToolResultsNotice': '开启时，工具结果将被占位符替换，以节省token消耗',
+        'hideToolResultsNotice': '开启时，工具结果将被占位符替换，以节省token消耗，但是不利于命中缓存',
         'arxiv': 'arXiv',
         'arxivNotice': '从arXiv获取最新的论文摘要',
         'gotoAplaybox': '模之屋获取VRM',

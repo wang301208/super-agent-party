@@ -1208,6 +1208,21 @@ preprocessEntertainmentText(content) {
   let formatted = content;
 
   // ============================================================
+  // 【新增】自定义元数据标签净化（羁绊系统等非标准 HTML 属性标签）
+  // 在任何图片隔离或 Markdown 解析之前运行，彻底防止其残留
+  // ============================================================
+  // 1. 过滤原始自定义标签（如：<user=派酱 love=6 familiarity=6>）
+  // 排除标准 HTML 标签，只匹配带有属性赋值（包含 =）的自定义标签
+  const preservedHtmlTags = '(?:div|span|p|br|a|img|strong|em|code|pre|ul|ol|li|h[1-6]|blockquote|table|thead|tbody|tr|th|td|iframe|video|audio|canvas|svg|path|section|button|i|details|summary)';
+  const customTagRegex = new RegExp(`<(?!\\/?${preservedHtmlTags}\\b)[^>]*=[^>]*>`, 'gi');
+  formatted = formatted.replace(customTagRegex, '');
+
+  // 2. 过滤转义或被 LaTeX 机制转换后的自定义标签（如：\lt user=派酱 ...\gt 或 &lt;user=派酱 ...&gt;）
+  const escapedCustomTagRegex = new RegExp(`(?:&lt;|\\\\lt\\s*)(?!\\/?${preservedHtmlTags}\\b)([^&\\\\\\n]*=[^&\\\\\\n]*)(?:&gt;|\\\\gt\\s*)`, 'gi');
+  formatted = formatted.replace(escapedCustomTagRegex, '');
+
+
+  // ============================================================
   // 1. 强力图片隔离：匹配文本中的图片（支持 silence 标签包裹及各种空白符）
   // 无论 AI 换行了几次、或者完全忘记换行，强行在其前后注入双换行符 (\n\n)
   // ============================================================
@@ -1272,159 +1287,174 @@ preprocessEntertainmentText(content) {
 },
 
 formatMessage(content, index) {
-      if (!content) return '';
+  if (!content) return '';
 
-      let processedForRender = content.trimEnd(); 
-      
-      const lines = content.split('\n');
-      const lastLine = lines[lines.length - 1].trim();
+  // ============================================================
+  // 【新增】自定义元数据标签净化（羁绊系统等非标准 HTML 属性标签）
+  // 在 formatMessage 预处理最开始执行，防止被 LaTeX 公式保护机制误杀
+  // ============================================================
+  let processedForRender = content;
+  
+  // 1. 过滤原始自定义标签（如：<user=派酱 love=6 familiarity=6>）
+  const preservedHtmlTags = '(?:div|span|p|br|a|img|strong|em|code|pre|ul|ol|li|h[1-6]|blockquote|table|thead|tbody|tr|th|td|iframe|video|audio|canvas|svg|path|section|button|i|details|summary)';
+  const customTagRegex = new RegExp(`<(?!\\/?${preservedHtmlTags}\\b)[^>]*=[^>]*>`, 'gi');
+  processedForRender = processedForRender.replace(customTagRegex, '');
 
-      if (lastLine.startsWith('|') && !lastLine.endsWith('|') && !/^[|\s-:]+$/.test(lastLine)) {
-        processedForRender += ' |';
-      }
+  // 2. 过滤转义或被 LaTeX 机制转换后的自定义标签（如：\lt user=派酱 ...\gt 或 &lt;user=派酱 ...&gt;）
+  const escapedCustomTagRegex = new RegExp(`(?:&lt;|\\/\\/lt\\s*|\\\\lt\\s*)(?!\\/?${preservedHtmlTags}\\b)([^&\\\\\\n]*=[^&\\\\\\n]*)(?:&gt;|\\/\\/gt\\s*|\\\\gt\\s*)`, 'gi');
+  processedForRender = processedForRender.replace(escapedCustomTagRegex, '');
 
-      // --- 预处理阶段 ---
-      const parts = this.splitCodeAndText(processedForRender);
-      let inUnclosedCodeBlock = false;
+  processedForRender = processedForRender.trimEnd(); 
+  
+  const lines = processedForRender.split('\n');
+  const lastLine = lines[lines.length - 1].trim();
 
-      let processedContent = parts.map(part => {
-        if (part.type === 'code') {
-          inUnclosedCodeBlock = !part.closed;
-          return part.content; 
-        } else if (inUnclosedCodeBlock) {
-          return part.content; 
-        } else {
-          let formatted = part.content;
+  if (lastLine.startsWith('|') && !lastLine.endsWith('|') && !/^[|\s-:]+$/.test(lastLine)) {
+    processedForRender += ' |';
+  }
 
-          // ============================================================
-          // 娱乐模式下：智能单换行符（\n）转换为双换行符（\n\n）
-          // 避开表格、列表、标题、引用等结构，防止破坏排版
-          // ============================================================
-          if (this.systemSettings && this.systemSettings.chatMode === 'entertainment') {
-            const linesList = formatted.split('\n');
-            const processedLines = [];
-            
-            for (let i = 0; i < linesList.length; i++) {
-              const currentLine = linesList[i].trim();
-              const nextLine = (linesList[i + 1] || '').trim();
+  // --- 预处理阶段 ---
+  const parts = this.splitCodeAndText(processedForRender);
+  let inUnclosedCodeBlock = false;
 
-              processedLines.push(linesList[i]);
+  let processedContent = parts.map(part => {
+    if (part.type === 'code') {
+      inUnclosedCodeBlock = !part.closed;
+      return part.content; 
+    } else if (inUnclosedCodeBlock) {
+      return part.content; 
+    } else {
+      let formatted = part.content;
 
-              if (i < linesList.length - 1) {
-                // 1. 判断是否属于表格行（包含 | 符号）
-                const isCurrentTable = currentLine.includes('|');
-                const isNextTable = nextLine.includes('|');
+      // ============================================================
+      // 娱乐模式下：智能单换行符（\n）转换为双换行符（\n\n）
+      // 避开表格、列表、标题、引用等结构，防止破坏排版
+      // ============================================================
+      if (this.systemSettings && this.systemSettings.chatMode === 'entertainment') {
+        const linesList = formatted.split('\n');
+        const processedLines = [];
+        
+        for (let i = 0; i < linesList.length; i++) {
+          const currentLine = linesList[i].trim();
+          const nextLine = (linesList[i + 1] || '').trim();
 
-                // 2. 判断是否是无序列表、有序列表或引用（如 `- `, `* `, `+ `, `1. `, `> `）
-                const structurePattern = /^([-*+>]|\d+\.)\s/;
-                const isCurrentStructure = structurePattern.test(currentLine);
-                const isNextStructure = structurePattern.test(nextLine);
+          processedLines.push(linesList[i]);
 
-                // 3. 判断是否是 Markdown 标题行（# ）
-                const headingPattern = /^#{1,6}\s/;
-                const isCurrentHeading = headingPattern.test(currentLine);
-                const isNextHeading = headingPattern.test(nextLine);
+          if (i < linesList.length - 1) {
+            // 1. 判断是否属于表格行（包含 | 符号）
+            const isCurrentTable = currentLine.includes('|');
+            const isNextTable = nextLine.includes('|');
 
-                // 4. 判断当前或下一行是否本身就是空行（避免产生过大空白）
-                const isCurrentEmpty = currentLine === '';
-                const isNextEmpty = nextLine === '';
+            // 2. 判断是否是无序列表、有序列表或引用（如 `- `, `* `, `+ `, `1. `, `> `）
+            const structurePattern = /^([-*+>]|\d+\.)\s/;
+            const isCurrentStructure = structurePattern.test(currentLine);
+            const isNextStructure = structurePattern.test(nextLine);
 
-                // 只有当当前行和下一行都不是上述排版结构时，才进行双换行处理
-                if (!isCurrentTable && !isNextTable && 
-                    !isCurrentStructure && !isNextStructure && 
-                    !isCurrentHeading && !isNextHeading &&
-                    !isCurrentEmpty && !isNextEmpty) {
-                  processedLines.push('');
-                }
-              }
+            // 3. 判断是否是 Markdown 标题行（# ）
+            const headingPattern = /^#{1,6}\s/;
+            const isCurrentHeading = headingPattern.test(currentLine);
+            const isNextHeading = headingPattern.test(nextLine);
+
+            // 4. 判断当前或下一行是否本身就是空行（避免产生过大空白）
+            const isCurrentEmpty = currentLine === '';
+            const isNextEmpty = nextLine === '';
+
+            // 只有当当前行和下一行都不是上述排版结构时，才进行双换行处理
+            if (!isCurrentTable && !isNextTable && 
+                !isCurrentStructure && !isNextStructure && 
+                !isCurrentHeading && !isNextHeading &&
+                !isCurrentEmpty && !isNextEmpty) {
+              processedLines.push('');
             }
-            formatted = processedLines.join('\n');
           }
-
-          // ============================================================
-          // 【新增】图片强制分离逻辑
-          // 匹配文本中的图片（包含可能有 `<silence>` 包裹的情况），强行在其前后注入双换行符
-          // ============================================================
-          formatted = formatted.replace(/(<silence>)?(!\[.*?\]\([^\)]+\))(<\/silence>)?/g, '\n\n$1$2$3\n\n');
-
-          // 收缩可能因为强行注入而产生的多余连续换行符，确保 Markdown 格式紧凑
-          formatted = formatted.replace(/\n{3,}/g, '\n\n');
-
-          // ============================================================
-          // 【新增】UI 屏蔽过滤：彻底移除 <silence> 与 </silence> 标签
-          // 由于此正则仅在 formatMessage 这一渲染管道内运行，因此绝对不影响
-          // 底层 TTS 合成引擎（其直接读取原始 content/pure_content 文本流）
-          // ============================================================
-          formatted = formatted.replace(/<\/?silence>/gi, '');
-
-          // ============================================================
-          // LaTeX 公式保护机制
-          // 防止公式内部的 < 和 > 被后续的 HTML 标签过滤正则误杀
-          // ============================================================
-          formatted = formatted.replace(/\s\s([\s\S]*?)(?:\s\s|$)|\$([^\$\n]+)\$/g, function(match) {
-            return match.replace(/</g, '\\lt ').replace(/>/g, '\\gt ');
-          });
-
-          // ============================================================
-          // 智能标签过滤
-          // ============================================================
-          const anyTagRegex = /<(\/?)([^\s>/>]+)([^>]*)>/g;
-          formatted = formatted.replace(anyTagRegex, (match, slash, tagName, attrs) => {
-            const lowerTagName = tagName.toLowerCase();
-            if (lowerTagName === 'think') return match;
-            const isStandardHtmlName = /^[a-zA-Z][a-zA-Z0-9-]*$/.test(tagName);
-            if (isStandardHtmlName) {
-              return match;
-            } else {
-              return ''; 
-            }
-          });
-
-          // ============================================================
-          // 处理 <think> 标签的 UI 转换
-          // ============================================================
-          const thinkTagRegexWithClose = /<think>([\s\S]*?)<\/think>/g;
-          const thinkTagRegexOpenOnly = /<think>[\s\S]*$/;
-          
-          formatted = formatted
-            .replace(thinkTagRegexWithClose, match => 
-              match.replace('<think>', '<div class="highlight-block-reasoning">').replace('</think>', '</div>')
-            )
-            .replace(thinkTagRegexOpenOnly, match => 
-              match.replace('<think>', '<div class="highlight-block-reasoning">')
-            );
-
-          return formatted;
         }
-      }).join('');
-
-      let rendered = md.render(processedContent);
-
-      // --- 恢复阶段 ---
-      rendered = rendered.replace(/\\\`/g, '`').replace(/\\\$/g, '$');
-
-      // 注意增加对 currentMsg 存在的判断
-      const currentMsg = this.messages && index >= 0 ? this.messages[index] : null;
-      if (currentMsg && index === this.messages.length - 1 && currentMsg.role === 'assistant' && this.isTyping && currentMsg.content !== currentMsg.pure_content) {
-        rendered = `<div class="thinking-header"><i class="fa-solid fa-lightbulb"></i> ${this.t('thinking')}</div>` + rendered;
+        formatted = processedLines.join('\n');
       }
 
-      // --- 后处理 ---
-      this.$nextTick(() => {
-        if(typeof this.initCopyButtons === 'function') this.initCopyButtons();
-        if(typeof this.initPreviewButtons === 'function') this.initPreviewButtons();
+      // ============================================================
+      // 【新增】图片强制分离逻辑
+      // 匹配文本中的图片（包含可能有 `<silence>` 包裹的情况），强行在其前后注入双换行符
+      // ============================================================
+      formatted = formatted.replace(/(<silence>)?(!\[.*?\]\([^\)]+\))(<\/silence>)?/g, '\n\n$1$2$3\n\n');
+
+      // 收缩可能因为强行注入而产生的多余连续换行符，确保 Markdown 格式紧凑
+      formatted = formatted.replace(/\n{3,}/g, '\n\n');
+
+      // ============================================================
+      // 【新增】UI 屏蔽过滤：彻底移除 <silence> 与 </silence> 标签
+      // 由于此正则仅在 formatMessage 这一渲染管道内运行，因此绝对不影响
+      // 底层 TTS 合成引擎（其直接读取原始 content/pure_content 文本流）
+      // ============================================================
+      formatted = formatted.replace(/<\/?silence>/gi, '');
+
+      // ============================================================
+      // LaTeX 公式保护机制
+      // 防止公式内部的 < 和 > 被后续的 HTML 标签过滤正则误杀
+      // ============================================================
+      formatted = formatted.replace(/\s\s([\s\S]*?)(?:\s\s|$)|\$([^\$\n]+)\$/g, function(match) {
+        return match.replace(/</g, '\\lt ').replace(/>/g, '\\gt ');
       });
 
-      rendered = rendered.replace(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"([^>]*)>/g, (match, href, otherAttrs) => {
-        if (otherAttrs.includes('footnote-ref') || otherAttrs.includes('footnote-backref') || href.startsWith('#')) {
-          return match; 
+      // ============================================================
+      // 智能标签过滤
+      // ============================================================
+      const anyTagRegex = /<(\/?)([^\s>/>]+)([^>]*)>/g;
+      formatted = formatted.replace(anyTagRegex, (match, slash, tagName, attrs) => {
+        const lowerTagName = tagName.toLowerCase();
+        if (lowerTagName === 'think') return match;
+        const isStandardHtmlName = /^[a-zA-Z][a-zA-Z0-9-]*$/.test(tagName);
+        if (isStandardHtmlName) {
+          return match;
+        } else {
+          return ''; 
         }
-        const formattedHref = typeof this.formatFileUrl === 'function' ? this.formatFileUrl(href) : href;
-        return `<a href="${formattedHref}" target="_blank"${otherAttrs}>`;
       });
 
-      return rendered;
-    },
+      // ============================================================
+      // 处理 <think> 标签的 UI 转换
+      // ============================================================
+      const thinkTagRegexWithClose = /<think>([\s\S]*?)<\/think>/g;
+      const thinkTagRegexOpenOnly = /<think>[\s\S]*$/;
+      
+      formatted = formatted
+        .replace(thinkTagRegexWithClose, match => 
+          match.replace('<think>', '<div class="highlight-block-reasoning">').replace('</think>', '</div>')
+        )
+        .replace(thinkTagRegexOpenOnly, match => 
+          match.replace('<think>', '<div class="highlight-block-reasoning">')
+        );
+
+      return formatted;
+    }
+  }).join('');
+
+  let rendered = md.render(processedContent);
+
+  // --- 恢复阶段 ---
+  rendered = rendered.replace(/\\\`/g, '`').replace(/\\\$/g, '$');
+
+  // 注意增加对 currentMsg 存在的判断
+  const currentMsg = this.messages && index >= 0 ? this.messages[index] : null;
+  if (currentMsg && index === this.messages.length - 1 && currentMsg.role === 'assistant' && this.isTyping && currentMsg.content !== currentMsg.pure_content) {
+    rendered = `<div class="thinking-header"><i class="fa-solid fa-lightbulb"></i> ${this.t('thinking')}</div>` + rendered;
+  }
+
+  // --- 后处理 ---
+  this.$nextTick(() => {
+    if(typeof this.initCopyButtons === 'function') this.initCopyButtons();
+    if(typeof this.initPreviewButtons === 'function') this.initPreviewButtons();
+  });
+
+  rendered = rendered.replace(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"([^>]*)>/g, (match, href, otherAttrs) => {
+    if (otherAttrs.includes('footnote-ref') || otherAttrs.includes('footnote-backref') || href.startsWith('#')) {
+      return match; 
+    }
+    const formattedHref = typeof this.formatFileUrl === 'function' ? this.formatFileUrl(href) : href;
+    return `<a href="${formattedHref}" target="_blank"${otherAttrs}>`;
+  });
+
+  return rendered;
+},
 
     formatMessageWrapper(content) {
         // 调用您现有的 formatMessage，这里传 index = -1 避免产生副作用（如 thinking 图标）

@@ -714,7 +714,7 @@ window.lang_enUS = {
         'wikipedia': 'Wikipedia',
         'wikipediaNotice': 'Get the summary or specific chapter content of a specified keyword from Wikipedia',
         'hideToolResults': 'Hide Tool Results',
-        'hideToolResultsNotice': 'When enabled, tool results will be replaced with placeholders to save token consumption',
+        'hideToolResultsNotice': 'When enabled, tool results will be replaced with placeholders to save token consumption, but it is not conducive to cache hits.',
         'arxiv': 'arXiv',
         'arxivNotice': 'Get the latest research paper information from arXiv',
         'gotoAplaybox': 'Aplaybox',
