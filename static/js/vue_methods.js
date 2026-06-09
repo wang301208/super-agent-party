@@ -2651,9 +2651,9 @@ formatMessage(content, index) {
         } catch (e) {
             console.error("Chat dispatch error:", e);
         } finally {
+          this.isTyping = false;
+          this.isSending = false;
           if (this.abortController === currentController) {
-              this.isTyping = false;
-              this.isSending = false;
               this.abortController = null;
           }
           await this.autoSaveSettings();
