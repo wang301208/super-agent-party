@@ -2648,11 +2648,13 @@ formatMessage(content, index) {
         } catch (e) {
             console.error("Chat dispatch error:", e);
         } finally {
-            this.isTyping = false;
-            this.isSending = false;
-            this.abortController = null;
-            await this.autoSaveSettings();
-            await this.saveConversations();
+          if (this.abortController === currentController) {
+              this.isTyping = false;
+              this.isSending = false;
+              this.abortController = null;
+          }
+          await this.autoSaveSettings();
+          await this.saveConversations();
         }
     },
 
@@ -2661,6 +2663,8 @@ formatMessage(content, index) {
     // 2. AI 生成与流式处理函数（支持 Human-in-the-loop 审批）
     // ==========================================
     async generateAIResponse(targetAgentId, agentDisplayName = null, isResume = false) {
+
+        const currentController = this.abortController;
 
         if (!isResume && !this.ttsSettings.enabled && (this.vrmOnline || this.vtsOnline) && this.ttsWebSocket) {
             this.sendTTSStatusToVRM('ttsStarted', {});
@@ -2959,12 +2963,11 @@ formatMessage(content, index) {
 
                             // === 核心分支处理 ===
                             if (this.ttsSettings.enabled) {
-                                // 为 TTS 即时处理 (保留原音频切片和口型同步)
-                                const parts = delta.content.split('```');
-                                for (let i = 0; i < parts.length; i++) {
-                                    if (!isCodeBlock) { tts_buffer += parts[i]; }
-                                    if (i < parts.length - 1) { isCodeBlock = !isCodeBlock; }
-                                }
+                                // 1. 利用流式状态机，将当前的 delta.content 转换为干净、安全的朗读文本
+                                const readableText = this.processMarkdownStreamForTTS(currentMsg, delta.content, false);
+                                tts_buffer += readableText;
+
+                                // 2. 切分已累积的可用文本语句送入 TTS
                                 const { chunks, chunks_voice, remaining, remaining_voice } = this.splitTTSBuffer(tts_buffer);
                                 if (chunks.length > 0) {
                                     currentMsg.chunks_voice.push(...chunks_voice);
@@ -3199,6 +3202,12 @@ formatMessage(content, index) {
             if (this._streamUpdateTimer) clearTimeout(this._streamUpdateTimer);
             this.flushStreamTextBuffer();
 
+            // === 核心修改：强制刷新流式状态机中的所有残留文本 ===
+            if (this.ttsSettings.enabled) {
+                const finalReadable = this.processMarkdownStreamForTTS(currentMsg, '', true);
+                tts_buffer += finalReadable;
+            }
+
             if (tts_buffer.trim() && this.ttsSettings.enabled) {
                 currentMsg.chunks_voice.push(this.cur_voice);
                 currentMsg.ttsChunks.push(tts_buffer);
@@ -3237,8 +3246,10 @@ formatMessage(content, index) {
             }
             if (audioResolve) audioResolve();
         } finally {
-            this.isSending = false;
-            this.isTyping = false;
+            if (this.abortController === currentController) {
+                this.isSending = false;
+                this.isTyping = false;
+            }
             this.voiceStack = ['default'];
             if (this.allBriefly) currentMsg.briefly = true;
 
@@ -3468,7 +3479,8 @@ formatMessage(content, index) {
 
         this.isSending = true; 
         this.isTyping = true;
-        this.abortController = new AbortController(); 
+        const currentController = new AbortController(); 
+        this.abortController = currentController; 
 
         try {
             let resultText = "";
@@ -9479,6 +9491,115 @@ handleCreateSlackSeparator(val) {
       }
       await this.autoSaveSettings();
     },
+
+
+
+/**
+ * 流式 Markdown 状态机解析器
+ * 过滤代码块、行内代码、表格、数学公式，并提取链接文本，拦截未闭合的流片段
+ * @param {Object} message 当前消息对象，用于挂载临时状态
+ * @param {string} deltaText 这一轮流式接收到的文本增量
+ * @param {boolean} isFinal 是否为最后一个数据块（流结束标志）
+ * @returns {string} 过滤处理后的、可直接用于 TTS 的文本
+ */
+processMarkdownStreamForTTS(message, deltaText, isFinal = false) {
+    // 初始化状态机上下文（保存在 message 内部，防止多轮对话冲突）
+    if (!message._ttsState) {
+        message._ttsState = {
+            inCodeBlock: false,
+            inInlineCode: false,
+            inTable: false,
+            inMath: false,
+            buffer: '' // 积压缓冲区，暂存未闭合的语法片段
+        };
+    }
+
+    const state = message._ttsState;
+    let textToProcess = state.buffer + deltaText;
+    let readableText = '';
+    let i = 0;
+
+    while (i < textToProcess.length) {
+        // 1. 拦截代码块 (```)
+        if (textToProcess.substring(i, i + 3) === '```') {
+            state.inCodeBlock = !state.inCodeBlock;
+            i += 3;
+            continue;
+        }
+        if (state.inCodeBlock) {
+            i++;
+            continue;
+        }
+
+        // 2. 拦截行内代码 (`)
+        if (textToProcess[i] === '`') {
+            state.inInlineCode = !state.inInlineCode;
+            i++;
+            continue;
+        }
+        if (state.inInlineCode) {
+            i++;
+            continue;
+        }
+
+        // 3. 拦截 LaTeX 数学公式 ($$ 或 $)
+        if (textToProcess.substring(i, i + 2) === '$$') {
+            state.inMath = !state.inMath;
+            i += 2;
+            continue;
+        }
+        if (state.inMath) {
+            i++;
+            continue;
+        }
+
+        // 4. 拦截 Markdown 表格 (| ... |)
+        // 如果一行以 '|' 开头，则判定其为表格行，跳过整行
+        if ((i === 0 || textToProcess[i - 1] === '\n') && textToProcess[i] === '|') {
+            state.inTable = true;
+        }
+        if (state.inTable) {
+            if (textToProcess[i] === '\n') {
+                state.inTable = false;
+                readableText += ' '; // 用空格/换行替代，作为朗读时的自然停顿
+            }
+            i++;
+            continue;
+        }
+
+        // 5. 阻断未闭合的图片 ![alt](url) 和链接 [text](url) 语法
+        if (textToProcess[i] === '[' || (textToProcess[i] === '!' && textToProcess[i + 1] === '[')) {
+            const remaining = textToProcess.slice(i);
+            // 匹配完整的 [显示文字](链接URL) 结构
+            const match = remaining.match(/^(!?\[([^\]]*)\]\(([^)]*)\))/);
+            if (match) {
+                const completeMatch = match[1];
+                const linkText = match[2];
+                if (!completeMatch.startsWith('!')) {
+                    // 仅提取链接的显示文本（如果是图片 ! 标记，则不转译为可读文本，直接滤掉）
+                    readableText += linkText;
+                }
+                i += completeMatch.length;
+                continue;
+            } else {
+                // 如果检测到 `[` 或 `![` 开头，但这一轮的流尚未收到闭合的 `)`
+                // 且流还没结束，则阻断后续字符处理，将其留入 buffer 供下一次增量拼接
+                if (!isFinal) {
+                    break;
+                }
+            }
+        }
+
+        // 6. 普通字符提取
+        readableText += textToProcess[i];
+        i++;
+    }
+
+    // 将未处理完毕的残留文本留入缓冲区
+    state.buffer = textToProcess.slice(i);
+    return readableText;
+},
+
 /**
      * 按分隔符 + <voice> 标签 拆分 buffer (终极防漏、防换行抖动版)
      * @returns {

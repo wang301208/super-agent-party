@@ -13452,6 +13452,72 @@ pre.code-block {
     margin: 0 !important;
 }
 
+/* =========================================
+   娱乐模式：代码块独立气泡 & 无边距无缝填充
+   ========================================= */
+
+/* 1. 让代码块容器独立成为一个无填充的气泡，并使用 overflow:hidden 裁剪圆角 */
+.mode-entertainment .stream-content > .code-block,
+.mode-entertainment .markdown-body > div:first-child > .code-block,
+.mode-entertainment .stream-content > pre,
+.mode-entertainment .markdown-body > div:first-child > pre {
+    background-color: var(--el-bg-color) !important;
+    border: 1px solid var(--el-border-color-lighter) !important;
+    border-radius: 18px 18px 18px 4px !important; /* 统一的 QQ 异形圆角 */
+    padding: 0 !important; /* 彻底清除边缘填充，让内部代码完全贴合边缘 */
+    margin: 0 0 12px 0 !important; /* 每个气泡的上下间隔 */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+    
+    /* 尺寸自适应与边界防撑破 */
+    width: fit-content;
+    min-width: 280px; /* 设定最小宽度，避免极短代码块显得过于局促 */
+    max-width: 100%;
+    display: block;
+    box-sizing: border-box;
+    overflow: hidden !important; /* 关键：强行裁剪内部 header 和 hljs 容器的直角，使其无缝贴合外层圆角 */
+}
+
+/* 2. 彻底清除内部 pre/code/hljs 的圆角和 margin，实现纯粹的无缝贴合 */
+.mode-entertainment .code-block pre,
+.mode-entertainment .code-block .hljs,
+.mode-entertainment pre > code {
+    border-radius: 0 !important; /* 清除内层容器的圆角，防止出现双重边框或背景露空 */
+    margin: 0 !important;
+}
+
+/* 3. 兼容 has-custom-bg (全局背景图玻璃化) 情况下的代码块气泡 */
+body.has-custom-bg .mode-entertainment .stream-content > .code-block,
+body.has-custom-bg .mode-entertainment .markdown-body > div:first-child > .code-block,
+body.has-custom-bg .mode-entertainment .stream-content > pre,
+body.has-custom-bg .mode-entertainment .markdown-body > div:first-child > pre {
+    background-color: color-mix(in srgb, var(--el-bg-color) 70%, transparent) !important;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(128, 128, 128, 0.15) !important;
+}
+/* =========================================
+   🚨 修复：办公模式 + 背景图下代码块透明问题
+   ========================================= */
+
+/* 1. 为 `body.has-custom-bg` 模式下的办公模式代码块，恢复毛玻璃背景 */
+/* 这个选择器确保了只有在两个条件同时满足时才生效 */
+body.has-custom-bg .message-content.mode-work .code-block {
+    /* 复制标准的毛玻璃样式，使其与其它组件风格统一 */
+    background-color: color-mix(in srgb, var(--el-bg-color-page) 50%, transparent) !important;
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    border: 1px solid rgba(128, 128, 128, 0.2) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* 添加轻微阴影，增强可读性 */
+    overflow: hidden; /* 确保内部元素不破坏圆角 */
+}
+
+/* 2. 确保内部的 <pre> 和 <code> 标签背景透明，以透出父级的毛玻璃效果 */
+body.has-custom-bg .message-content.mode-work .code-block pre,
+body.has-custom-bg .message-content.mode-work .code-block .hljs {
+    background: transparent !important;
+    background-color: transparent !important;
+}
 
 /* =========================================
    全局背景图毛玻璃透视终极修复 (Body-level Glassmorphism)
