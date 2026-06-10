@@ -9658,7 +9658,7 @@ processMarkdownStreamForTTS(message, deltaText, isFinal = false) {
 },
 
 /**
-     * 按分隔符 + <voice> 标签 拆分 buffer (终极防漏、防换行抖动版)
+     * 按分隔符 + <voice> 标签 拆分 buffer (终极防漏、防换行抖动、完美兼容中文音色版)
      * @returns {
      *   chunks: string[]        // 纯文本块（已去标签、已清理）
      *   chunks_voice: string[]  // 与 chunks 一一对应的声音 key
@@ -9689,7 +9689,9 @@ processMarkdownStreamForTTS(message, deltaText, isFinal = false) {
         });
 
         // B. 清理/静音非音色定义的其他 HTML 标签 (如 <button>, <img ...>)，防止 TTS 念出 HTML 源码
-        const voiceTagsPattern = `\\/?(?:${voiceKeys.join('|')})\\b`;
+        // 🔴 核心修复点 1：使用 Unicode 安全的边界否定断言 (?![a-zA-Z0-9_\u4e00-\u9fa5_-]) 代替 ASCII 的 \b
+        // 确保“星莱”、“旁白”等中文字符后面的“>”或“/”能被正确识别为边界，不会将中文音色标签当成普通 HTML 误杀
+        const voiceTagsPattern = `\\/?(?:${voiceKeys.join('|')})(?![a-zA-Z0-9_\\u4e00-\\u9fa5_-])`;
         const htmlTagRe = new RegExp(`<(?!(?:${voiceTagsPattern}))[^>]+>`, 'gi');
         buffer = buffer.replace(htmlTagRe, '');
 
@@ -9716,7 +9718,11 @@ processMarkdownStreamForTTS(message, deltaText, isFinal = false) {
             .map(s => s.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\r/g, '\r'));
 
         const openTagRe = new RegExp(`<(${voiceKeys.join('|')})>`, 'gi');
-        const closeTagRe = /<\/\w+>/gi; // 匹配任何结束标签
+        
+        // 🔴 核心修复点 2：将原来仅支持英文匹配的 /<\/\w+>/gi 改为支持中文字符的匹配正则
+        // 确保中文字符的闭合标签（如 </星莱>、</旁白>）能正常触发出栈，防止音色发生堆叠混乱
+        const closeTagRe = /<\/[a-zA-Z0-9_\u4e00-\u9fa5]+>/gi; 
+        
         const sepRe = separators.length
             ? new RegExp(separators.map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g')
             : /$^/;
