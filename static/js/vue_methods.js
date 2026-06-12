@@ -8444,29 +8444,15 @@ handleCreateSlackSeparator(val) {
           this.systemSettings.backgroundURL = uploadedUrl;
           
           // 自动保存配置
-          if (typeof this.autoSaveSettings === 'function') {
-            this.autoSaveSettings();
-          }
+          this.autoSaveSettings();
           
-          if (typeof showNotification === 'function') {
-            showNotification(this.t('uploadSuccess') || 'Upload successful', 'success');
-          } else if (this.$message) {
-            this.$message.success(this.t('uploadSuccess') || 'Upload successful');
-          }
+          showNotification(this.t('uploadSuccess') || 'Upload successful', 'success');
         } else {
-          if (typeof showNotification === 'function') {
-            showNotification(this.t('uploadFailed') || 'Upload failed', 'error');
-          } else if (this.$message) {
-            this.$message.error(this.t('uploadFailed') || 'Upload failed');
-          }
+          showNotification(this.t('uploadFailed') || 'Upload failed', 'error');
         }
       } catch (error) {
         console.error('Background upload error:', error);
-        if (typeof showNotification === 'function') {
-          showNotification(error.message || 'Upload error', 'error');
-        } else if (this.$message) {
-          this.$message.error(error.message || 'Upload error');
-        }
+        showNotification(error.message || 'Upload error', 'error');
       }
     },
 

@@ -3605,7 +3605,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             <input
                               type="file"
                               ref="avatarInput"
-                              accept="image/*"
+                              accept=".png, .jpg, .jpeg, .gif, .webp, .bmp, image/png, image/jpeg, image/gif, image/webp, image/bmp"
                               style="display: none"
                               @change="handleAvatarUpload"
                             ></input>
@@ -12472,7 +12472,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                       <input
                         type="file"
                         ref="bgImageInput"
-                        accept="image/*"
+                        accept=".png, .jpg, .jpeg, .gif, .webp, .bmp, image/png, image/jpeg, image/gif, image/webp, image/bmp"
                         style="display: none"
                         @change="handleBgUpload"
                       />
