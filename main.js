@@ -2048,7 +2048,7 @@ app.on('web-contents-created', (event, contents) => {
     }
   });
 });
-app.commandLine.appendSwitch('disable-http-cache');
+// app.commandLine.appendSwitch('disable-http-cache');
 
 // --- [修改后的 3] 协议处理核心函数 & IPC ---
 
