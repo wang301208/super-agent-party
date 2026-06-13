@@ -82,6 +82,7 @@ dependencies = [
     "huggingface-hub>=1.7.1",
     "modelscope>=1.35.4",
     "pillow>=12.2.0",
+    "simplejpeg>=1.7.6",
     "pyasn1>=0.6.3",
     "lxml>=6.1.0",
     "langchain-core>=1.2.28",

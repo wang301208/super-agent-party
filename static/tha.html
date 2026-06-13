@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THA Desk Pet</title>
+<link rel="stylesheet" href="fontawesome/css/all.min.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: auto;
+}
+.ctrl-btn {
+  width: 28px; height: 28px;
+  background: rgba(255,255,255,0.95);
+  border: 2px solid rgba(0,0,0,0.1);
+  border-radius: 50%;
+  color: #333;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  user-select: none;
+  pointer-events: auto;
+  transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+  -webkit-app-region: no-drag;
+  -webkit-tap-highlight-color: transparent;
+}
+.ctrl-btn:hover {
+  background: rgba(255,255,255,1);
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+}
+
+#control-panel {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  transform: translateX(20px);
+}
+#control-panel.hidden { pointer-events: none; }
+
+#subtitle-container {
+  position: fixed;
+  bottom: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  padding: 8px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  max-width: 80%;
+  text-align: center;
+  z-index: 100;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+#ptt-floating-btn {
+  position: fixed;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  background: rgba(255,107,53,0.9);
+  border: none;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: #fff;
+  z-index: 200;
+  box-shadow: 0 4px 16px rgba(255,107,53,0.4);
+  transition: transform 0.15s, box-shadow 0.15s;
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+}
+#ptt-floating-btn.visible { display: flex; }
+#ptt-floating-btn:active { transform: translateX(-50%) scale(0.92); }
+#ptt-floating-btn.recording {
+  background: rgba(220,53,69,0.9);
+  box-shadow: 0 0 0 6px rgba(220,53,69,0.3), 0 4px 16px rgba(220,53,69,0.4);
+  animation: pt-pulse 1.2s infinite;
+}
+@keyframes pt-pulse {
+  0%,100% { box-shadow: 0 0 0 6px rgba(220,53,69,0.3), 0 4px 16px rgba(220,53,69,0.4); }
+  50% { box-shadow: 0 0 0 12px rgba(220,53,69,0.1), 0 4px 16px rgba(220,53,69,0.4); }
+}
+
+#text-input-container {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,0,0,0.75);
+  padding: 6px 14px;
+  border-radius: 24px;
+  z-index: 300;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.15);
+}
+#text-input-container.visible { display: flex; }
+#text-input-field {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 13px;
+  min-width: 180px;
+  padding: 4px 0;
+}
+#text-input-field::placeholder { color: rgba(255,255,255,0.4); }
+#text-send-btn {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  border-radius: 50%;
+  width: 28px; height: 28px;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: background 0.2s;
+}
+#text-send-btn:hover { background: rgba(255,255,255,0.25); }
+</style>
+</head>
+<body>
+<div id="pixi-container" style="width:100%;height:100%;"></div>
+
+<div id="subtitle-container"></div>
+<div id="ptt-floating-btn"><i class="fa-solid fa-microphone"></i></div>
+<div id="text-input-container">
+  <input type="text" id="text-input-field" placeholder="输入文字与模型对话...">
+  <button id="text-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
+</div>
+
+<div id="control-panel" class="hidden">
+  <div id="drag-btn" class="ctrl-btn" title="拖拽窗口">
+    <span style="position:absolute;top:0;left:0;width:100%;height:100%;-webkit-app-region:drag;z-index:1;"></span>
+    <i class="fa-solid fa-arrows-up-down-left-right" style="position:relative;z-index:2;pointer-events:none;"></i>
+  </div>
+  <div id="lock-btn" class="ctrl-btn" title="锁定穿透">
+    <i class="fas fa-lock-open"></i>
+  </div>
+  <div id="hide-btn" class="ctrl-btn" title="鼠标移开时隐藏模型">
+    <i class="fas fa-eye"></i>
+  </div>
+  <div id="prev-model-btn" class="ctrl-btn" title="上一个模型">
+    <i class="fas fa-chevron-up"></i>
+  </div>
+  <div id="next-model-btn" class="ctrl-btn" title="下一个模型">
+    <i class="fas fa-chevron-down"></i>
+  </div>
+  <div id="voice-btn" class="ctrl-btn" title="语音输入">
+    <i class="fa-solid fa-microphone"></i>
+  </div>
+  <div id="text-btn" class="ctrl-btn" title="文字输入">
+    <i class="fas fa-keyboard"></i>
+  </div>
+  <div id="ws-status-btn" class="ctrl-btn" title="连接状态">
+    <i class="fas fa-wifi"></i>
+  </div>
+  <div id="refresh-btn" class="ctrl-btn" title="刷新">
+    <i class="fas fa-redo-alt"></i>
+  </div>
+  <div id="close-btn" class="ctrl-btn" title="关闭窗口">
+    <i class="fas fa-times"></i>
+  </div>
+</div>
+
+<script src="libs/pixi/pixi.min.js"></script>
+<script type="module" src="js/tha.js"></script>
+</body>
+</html>

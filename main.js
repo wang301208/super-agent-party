@@ -16,7 +16,8 @@ let workspaceWatcher = null; // 声明全局的 watcher 变量
 // ★ VMC：UDP 收发资源
 let vmcUdpPort = null;          // osc.UDPPort 实例
 let vmcReceiverActive = false;  // 接收是否运行
-let vrmWindows = []; 
+let vrmWindows = [];
+let thaWindows = [];
 let shotOverlay = null
 let isMac = process.platform === 'darwin';
 const vmcSendSocket = dgram.createSocket('udp4'); // 发送复用同一 socket
@@ -1130,6 +1131,73 @@ ipcMain.handle('upload-to-workspace', async (event, { targetDirPath, sourceFileP
         const win = BrowserWindow.fromWebContents(event.sender);
         return win.isIgnoreMouseEvents();
     });
+    ipcMain.handle('start-tha-window', async (_, windowConfig = {}) => {
+      const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+      const windowWidth = windowConfig.width || 540;
+      const windowHeight = windowConfig.height || 540;
+
+      const x = windowConfig.x !== undefined ? windowConfig.x : width - windowWidth - 40;
+      let defaultY;
+      if (height >= windowHeight) {
+        defaultY = height - windowHeight;
+      } else {
+        defaultY = 0;
+      }
+      const y = windowConfig.y !== undefined ? windowConfig.y : defaultY;
+
+      const thaWindow = new BrowserWindow({
+        width: windowWidth,
+        height: windowHeight,
+        x,
+        y,
+        transparent: true,
+        frame: false,
+        alwaysOnTop: true,
+        skipTaskbar: true,
+        hasShadow: false,
+        acceptFirstMouse: true,
+        backgroundColor: 'rgba(0, 0, 0, 0)',
+        webPreferences: {
+          contextIsolation: true,
+          nodeIntegration: true,
+          enableRemoteModule: true,
+          sandbox: false,
+          devTools: isDev,
+          webAudio: true,
+          autoplayPolicy: 'no-user-gesture-required',
+          preload: path.join(__dirname, 'static/js/preload.js')
+        }
+      });
+
+      await thaWindow.loadURL(`http://${HOST}:${PORT}/tha.html`);
+      thaWindow.setIgnoreMouseEvents(false);
+      thaWindow.setAlwaysOnTop(true);
+      thaWindows.push(thaWindow);
+
+      thaWindow.on('closed', () => {
+        thaWindows = thaWindows.filter(w => w !== thaWindow);
+      });
+
+      return thaWindow.id;
+    });
+
+    ipcMain.handle('stop-tha-window', (_, windowId) => {
+      if (windowId !== undefined) {
+        const win = thaWindows.find(w => w.id === windowId);
+        if (win && !win.isDestroyed()) {
+          win.close();
+        }
+        thaWindows = thaWindows.filter(w => w.id !== windowId);
+      } else {
+        thaWindows.forEach(win => {
+          if (!win.isDestroyed()) {
+            win.close();
+          }
+        });
+        thaWindows = [];
+      }
+    });
+
     ipcMain.handle('stop-vrm-window', (_, windowId) => {
       if (windowId !== undefined) {
         const win = vrmWindows.find(w => w.id === windowId);

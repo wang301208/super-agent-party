@@ -111,6 +111,7 @@ BLOCKLIST_FILE = os.path.join(CONFIG_BASE_PATH, 'blocklist.json')
 
 # --- 静态资源 ---
 DEFAULT_VRM_DIR = os.path.join(base_path, 'vrm')
+DEFAULT_THA_DIR = os.path.join(base_path, 'tha_models')
 STATIC_DIR = os.path.join(base_path, "static")
 
 # --- 数据库 ---

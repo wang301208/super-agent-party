@@ -572,6 +572,16 @@
       "gaussUserScenes": [],  
       "selectedGaussSceneId": ""
     },
+    "THAConfig": {
+      "name": "default",
+      "enabledEmotions": false,
+      "enabledMouthSync": false,
+      "selectedModelId": "Lyra",
+      "windowWidth": 540,
+      "windowHeight": 540,
+      "defaultModels": [],
+      "userModels": []
+    },
     "comfyuiServers": ["http://127.0.0.1:8188"],
     "comfyuiAPIkey": "",
     "BotConfig": {

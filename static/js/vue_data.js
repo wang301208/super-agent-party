@@ -955,6 +955,22 @@ let vue_data = {
       gaussUserScenes: [],      // GAUSS
       selectedGaussSceneId: '',
     },
+    THAConfig: {
+      name: 'default',
+      enabledEmotions: false,
+      enabledMouthSync: false,
+      selectedModelId: 'Lyra',
+      windowWidth: 540,
+      windowHeight: 540,
+      defaultModels: [],
+      userModels: []
+    },
+    showThaModelDialog: false,
+    newThaModel: {
+      file: null,
+      name: '',
+      displayName: ''
+    },
     newAppearanceConfig: {
       name: '',
       windowWidth: 540,
@@ -1581,6 +1597,7 @@ let vue_data = {
     },
     deployTiles: [
       { id: 'table_pet', title: 'tablePet', icon: "fa-solid fa-user-ninja"},
+      { id: 'THA_pet', title: 'THAPet', icon: "fa-solid fa-hat-wizard"},
       { id: 'vts_config', title: 'vtsbot', icon: "fa-solid fa-child"},
       { id: 'live_stream', title: 'live_stream_bot', icon: "fa-solid fa-video"},
       { id: 'im_bot', title: 'imBot', icon: 'fa-solid fa-comment' },
