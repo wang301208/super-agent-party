@@ -1113,6 +1113,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict,is_sub
         glob_files_tool_local,     # 本地 glob 查找
         todo_write_tool_local,     # 本地任务管理
         local_net_tool,            # 本地网络工具
+        send_process_input_tool,
         read_skill_tool_local,
     )
 
@@ -1248,6 +1249,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict,is_sub
         "glob_files_tool_local": glob_files_tool_local,         # 本地 glob 查找
         "todo_write_tool_local": todo_write_tool_local,         # 本地任务管理
         "local_net_tool": local_net_tool,                       # 本地网络工具
+        "send_process_input_tool":send_process_input_tool,       # 本地进程输入工具
         "read_skill_tool_local": read_skill_tool_local,         # 本地技能读取
 
         # 任务中心工具（新增）
@@ -1292,6 +1294,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict,is_sub
         "kill_process_tool",
         "docker_manage_ports_tool",
         "local_net_tool",
+        "send_process_input_tool",
     ]
     
     # 只有当调用的工具属于敏感工具列表时才进行拦截检查
@@ -4075,6 +4078,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             "kill_process_tool",
                             "docker_manage_ports_tool",
                             "local_net_tool",
+                            "send_process_input_tool",
                             
                             # 阻止子智能体创建子任务（防止递归）
                             "create_subtask",

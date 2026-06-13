@@ -446,6 +446,34 @@ class ProcessManager:
         }
         return pid
 
+    async def send_input(self, pid: str, text: str) -> str:
+        """
+        往指定的后台进程中发送输入（模拟键盘敲击，例如输入 'y\n'）
+        """
+        if pid not in self._processes:
+            return f"Error: Process ID {pid} not found."
+        
+        info = self._processes[pid]
+        proc = info["proc"]
+        
+        if proc.returncode is not None:
+            return f"Error: Process {pid} has already exited with code {proc.returncode}."
+            
+        if not proc.stdin:
+            return f"Error: Process {pid} was not started with stdin enabled."
+            
+        try:
+            # 确保发送的文本以换行符结尾，模拟用户按下回车键
+            if not text.endswith('\n'):
+                text += '\n'
+                
+            proc.stdin.write(text.encode('utf-8'))
+            await proc.stdin.drain()
+            
+            return f"Successfully sent input '{text.strip()}' to process {pid}."
+        except Exception as e:
+            return f"Failed to send input: {str(e)}"
+
     async def _monitor_output(self, pid: str, proc, logs: deque):
         async def read_stream_to_log(stream, prefix=""):
             if not stream: return
@@ -588,6 +616,12 @@ class ProcessManager:
 process_manager = ProcessManager()
 
 # ==================== [新增] 核心基础设施：Docker 网络代理 ====================
+
+async def send_process_input_tool(pid: str, text: str) -> str:
+    """[Common] 往指定的后台进程发送交互输入（stdin）"""
+    if not pid:
+        return "Error: 'pid' is required to send input."
+    return await process_manager.send_input(pid, text)
 
 class DockerPortProxy:
     """纯 Python 实现的 Docker 端口转发器 (Container -> Host)"""
@@ -887,6 +921,7 @@ async def docker_sandbox(command: str, background: bool = False, timeout: int = 
     try:
         process = await asyncio.create_subprocess_exec(
             *exec_cmd,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -1661,6 +1696,7 @@ async def shell_tool_local(command: str, background: bool = False, timeout: int 
     try:
         process = await asyncio.create_subprocess_exec(
             exe, *args,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE, 
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
@@ -2597,7 +2633,27 @@ TOOLS_REGISTRY = {
                 "required": ["action"]
             }
         }
-    }
+    },
+    "send_process_input": {
+        "type": "function", "function": {
+            "name": "send_process_input_tool",
+            "description": "Send standard input (stdin) to an active background process (e.g., sending 'y' or 'yes' to interactive confirmation prompts).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pid": {
+                        "type": "string",
+                        "description": "The background process ID (PID) to send input to."
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "The text to send to the process. A newline character will be automatically appended if it is missing."
+                    }
+                },
+                "required": ["pid", "text"]
+            }
+        }
+    },
 }
 
 LOCAL_TOOLS_REGISTRY = {
@@ -2875,7 +2931,27 @@ LOCAL_TOOLS_REGISTRY = {
                 "required": ["action"]
             }
         }
-    }
+    },
+    "send_process_input_local": {
+        "type": "function", "function": {
+            "name": "send_process_input_tool",
+            "description": "Send standard input (stdin) to an active local background process (e.g., sending 'y' or 'yes' to interactive confirmation prompts).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pid": {
+                        "type": "string",
+                        "description": "The background process ID (PID) to send input to."
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "The text to send to the process. A newline character will be automatically appended if it is missing."
+                    }
+                },
+                "required": ["pid", "text"]
+            }
+        }
+    },
 }
 
 def get_tools_for_mode(mode: str) -> list:
@@ -2895,7 +2971,7 @@ def get_tools_for_mode(mode: str) -> list:
     infra = [TOOLS_REGISTRY["bash"], TOOLS_REGISTRY["list_processes"], TOOLS_REGISTRY["get_process_logs"], TOOLS_REGISTRY["kill_process"], TOOLS_REGISTRY["manage_ports"]]
     
     if mode == "default": return read
-    if mode == "auto-approve": return read + edit + [TOOLS_REGISTRY["list_processes"], TOOLS_REGISTRY["get_process_logs"], TOOLS_REGISTRY["kill_process"]]
+    if mode == "auto-approve": return read + edit + [TOOLS_REGISTRY["list_processes"], TOOLS_REGISTRY["get_process_logs"], TOOLS_REGISTRY["kill_process"],TOOLS_REGISTRY["send_process_input"]]
     if mode == "yolo": return read + edit + infra
     return read
 
@@ -2918,6 +2994,6 @@ def get_local_tools_for_mode(mode: str) -> list:
     ]
     
     if mode == "default": return read
-    if mode == "auto-approve": return read + edit + [LOCAL_TOOLS_REGISTRY["list_processes"], LOCAL_TOOLS_REGISTRY["get_process_logs"], LOCAL_TOOLS_REGISTRY["kill_process"], LOCAL_TOOLS_REGISTRY["local_net_tool"]]
+    if mode == "auto-approve": return read + edit + [LOCAL_TOOLS_REGISTRY["list_processes"], LOCAL_TOOLS_REGISTRY["get_process_logs"], LOCAL_TOOLS_REGISTRY["kill_process"], LOCAL_TOOLS_REGISTRY["local_net_tool"],LOCAL_TOOLS_REGISTRY["send_process_input_local"]]
     if mode == "yolo": return read + edit + infra
     return read
