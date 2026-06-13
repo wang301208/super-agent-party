@@ -247,45 +247,53 @@ class THAEngine:
         self._loaded = True
 
     def render(self, pose: np.ndarray) -> bytes:
-            """渲染一帧, 返回 JPEG bytes"""
-            # 懒加载核心
-            if not self._loaded:
-                self.load()
-                
-            p = pose.reshape(1, 45).astype(np.float32)
-            out = self.session.run(None, {"image": self.image_np, "pose": p})[0]
-            
-            img_data = out[0]
-            # 判断模型是否输出 4 通道 (RGBA)
-            if img_data.shape[0] == 4:
-                rgb = img_data[:3, :, :]
-                alpha = img_data[3, :, :]
-                
-                # 自适应检测数据类型与范围，防止图像变色或爆白
-                if img_data.dtype != np.uint8:
-                    # 浮点型数据 (0~1 或 -1~1) 归一化
-                    max_val = np.max(img_data)
-                    if max_val <= 1.05:
-                        rgb = (rgb + 1.0) / 2.0 * 255.0 if np.min(rgb) < -0.1 else rgb * 255.0
-                        alpha = (alpha + 1.0) / 2.0 if np.min(alpha) < -0.1 else alpha
-                    alpha = np.expand_dims(alpha, axis=0)
-                    
-                    # 🌟 优化：使用预分配的背景常量，避免高频分配内存
-                    blended = rgb * alpha + self.green_bg * (1.0 - alpha)
-                    rgb_out = np.ascontiguousarray(blended.astype(np.uint8).transpose(1, 2, 0))
-                else:
-                    # 字节型数据 (0~255 uint8) 的混合
-                    alpha = alpha.astype(np.float32) / 255.0
-                    alpha = np.expand_dims(alpha, axis=0)
-                    
-                    # 🌟 优化：使用预分配的背景常量，避免高频分配内存
-                    blended = rgb.astype(np.float32) * alpha + self.green_bg * (1.0 - alpha)
-                    rgb_out = np.ascontiguousarray(blended.astype(np.uint8).transpose(1, 2, 0))
-            else:
-                # 如果是 3 通道模型，不进行绿幕混合，安全降级回原版
-                rgb_out = np.ascontiguousarray(img_data.transpose(1, 2, 0))
+        """渲染一帧, 返回 JPEG bytes"""
+        if not self._loaded:
+            self.load()
 
-            return simplejpeg.encode_jpeg(rgb_out, quality=75, colorspace='RGB')
+        p = pose.reshape(1, 45).astype(np.float32)
+        out = self.session.run(None, {"image": self.image_np, "pose": p})[0]
+        img_data = out[0]  # (C, 512, 512)  CHW
+
+        C = img_data.shape[0]
+
+        if C == 4:
+            # ── RGBA 模型：需合成为绿幕 ──
+            rgb = img_data[:3, :, :]
+            alpha = img_data[3, :, :]
+
+            if img_data.dtype == np.uint8:
+                alpha_f = alpha.astype(np.float32)[np.newaxis, :, :] / 255.0
+                result = rgb.astype(np.float32) * alpha_f \
+                         + self.green_bg * (1.0 - alpha_f)
+                result = np.clip(result, 0, 255).astype(np.uint8)
+            else:
+                r_min, a_min = np.min(rgb), np.min(alpha)
+                if r_min < -0.1:
+                    rgb = (rgb + 1.0) * 127.5
+                else:
+                    rgb = rgb * 255.0
+                if a_min < -0.1:
+                    alpha = (alpha + 1.0) * 0.5
+                alpha = alpha[np.newaxis, :, :]
+                result = rgb * alpha + self.green_bg * (1.0 - alpha)
+                result = np.clip(result, 0, 255).astype(np.uint8)
+
+        elif C == 3:
+            # ── 3 通道绿幕模型（model.onnx 默认走这里）──
+            if img_data.dtype == np.uint8:
+                result = img_data
+            else:
+                if np.min(img_data) < -0.1:
+                    result = np.clip((img_data + 1.0) * 127.5, 0, 255).astype(np.uint8)
+                else:
+                    result = np.clip(img_data * 255.0, 0, 255).astype(np.uint8)
+
+        else:
+            raise RuntimeError(f"Unsupported channel count: {C}")
+
+        rgb_out = np.ascontiguousarray(result.transpose(1, 2, 0))
+        return simplejpeg.encode_jpeg(rgb_out, quality=75, colorspace='RGB')
 
     @property
     def loaded(self) -> bool:
