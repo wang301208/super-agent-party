@@ -33,18 +33,33 @@ def _srgb_to_linear(x):
 # 2. 情感 -> 45维姿态参数映射表
 # ------------------------------------------------------------
 EMOTION_POSE_MAP: Dict[str, np.ndarray] = {}
-for _emo_name, _indices in {
-    "happy":    (list(range(0, 6)), 1.0),
-    "sad":      (list(range(6, 12)), 0.8),
-    "angry":    (list(range(12, 18)), 0.9),
-    "surprised": (list(range(20, 26)), 0.7),
-    "relaxed":  ([], 0.0),
-}.items():
-    _arr = np.zeros(45, dtype=np.float32)
-    _idxs, _scale = _indices
-    for _i in _idxs:
-        _arr[_i] = _scale
-    EMOTION_POSE_MAP[_emo_name] = _arr
+
+def _make_pose(indices: list, scale: float = 1.0) -> np.ndarray:
+    arr = np.zeros(45, dtype=np.float32)
+    for i in indices:
+        arr[i] = scale
+    return arr
+
+EMOTION_POSE_MAP["happy"] = _make_pose(
+    [8, 9, 14, 15, 34, 35],  # eyebrow_happy(L/R) + eye_happy_wink(L/R) + mouth_raised_corner(L/R)
+    1.0
+)
+EMOTION_POSE_MAP["sad"] = _make_pose(
+    [0, 1, 6, 7, 32, 33],  # eyebrow_troubled(L/R) + eyebrow_raised(L/R) + mouth_lowered_corner(L/R)
+    0.8
+)
+EMOTION_POSE_MAP["angry"] = _make_pose(
+    [2, 3, 4, 5, 20, 21],  # eyebrow_angry(L/R) + eyebrow_lowered(L/R) + eye_unimpressed(L/R)
+    0.9
+)
+EMOTION_POSE_MAP["surprised"] = _make_pose(
+    [6, 7, 16, 17, 26, 30],  # eyebrow_raised(L/R) + eye_surprised(L/R) + mouth_aaa + mouth_ooo
+    0.7
+)
+EMOTION_POSE_MAP["relaxed"] = _make_pose(
+    [18, 19],  # eye_relaxed(L/R) — close eyes
+    1.0
+)
 
 # neutral 清零
 EMOTION_POSE_MAP["neutral"] = np.zeros(45, dtype=np.float32)
@@ -139,30 +154,35 @@ class THAPoseGenerator:
         p[37] = idle_ix - my * 0.85
         p[38] = idle_iy - mx * 0.95
 
-        # blinking
-        self.blink_timer += dt
-        if self.blink_state == 0:
-            if self.blink_timer >= self.next_blink:
-                self.blink_state = 1
-                self.blink_timer = 0.0
-                self.next_blink = self._rb()
-        elif self.blink_state == 1:
-            v = min(self.blink_timer / self.blink_dur, 1.0)
-            p[18] = p[19] = v
-            if v >= 1.0:
-                self.blink_state = 2
-                self.blink_timer = 0.0
-        elif self.blink_state == 2:
-            p[18] = p[19] = 1.0
-            if self.blink_timer >= self.blink_hold:
-                self.blink_state = 3
-                self.blink_timer = 0.0
-        elif self.blink_state == 3:
-            v = 1.0 - min(self.blink_timer / self.blink_dur, 1.0)
-            p[18] = p[19] = v
-            if v <= 0.0:
-                self.blink_state = 0
-                self.blink_timer = 0.0
+        # blinking — 闭眼状态下暂停眨眼
+        eyes_closed_by_emotion = max(self._emotion_target[18], self._emotion_target[19]) > 0.3
+        if not eyes_closed_by_emotion:
+            self.blink_timer += dt
+            if self.blink_state == 0:
+                if self.blink_timer >= self.next_blink:
+                    self.blink_state = 1
+                    self.blink_timer = 0.0
+                    self.next_blink = self._rb()
+            elif self.blink_state == 1:
+                v = min(self.blink_timer / self.blink_dur, 1.0)
+                p[18] = p[19] = v
+                if v >= 1.0:
+                    self.blink_state = 2
+                    self.blink_timer = 0.0
+            elif self.blink_state == 2:
+                p[18] = p[19] = 1.0
+                if self.blink_timer >= self.blink_hold:
+                    self.blink_state = 3
+                    self.blink_timer = 0.0
+            elif self.blink_state == 3:
+                v = 1.0 - min(self.blink_timer / self.blink_dur, 1.0)
+                p[18] = p[19] = v
+                if v <= 0.0:
+                    self.blink_state = 0
+                    self.blink_timer = 0.0
+        else:
+            self.blink_state = 0
+            self.blink_timer = 0.0
         p[26] = 0.0
 
         # 混合情感姿态

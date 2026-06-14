@@ -2492,9 +2492,6 @@ formatMessage(content, index) {
     // 1. 用户动作入口与调度函数（可直接替换）
     // ==========================================
     async sendMessage(role = 'user') { 
-        const currentController = new AbortController(); 
-        this.abortController = currentController; // 更新全局控制器
-
         // 基础校验
         if (!this.userInput.trim() && (!this.files || this.files.length === 0) && (!this.images || this.images.length === 0)) return;
         if (this.isTyping) return;
@@ -2695,9 +2692,7 @@ formatMessage(content, index) {
         } finally {
           this.isTyping = false;
           this.isSending = false;
-          if (this.abortController === currentController) {
-              this.abortController = null;
-          }
+          this.abortController = null;
           await this.autoSaveSettings();
           await this.saveConversations();
         }
@@ -2902,6 +2897,11 @@ formatMessage(content, index) {
         };
 
         try {
+            const fetchTimeoutMs = 120000;
+            const abortSignal = this.abortController.signal;
+            const timeoutSignal = AbortSignal.timeout(fetchTimeoutMs);
+            const combinedSignal = AbortSignal.any([abortSignal, timeoutSignal]);
+
             const response = await fetch(`/v1/chat/completions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2916,7 +2916,7 @@ formatMessage(content, index) {
                     group_id: this.stringifyEntityId(this.activeConversationGroupId || this.draftConversationGroupId || 'default'),
                     user_message_id: this.stringifyEntityId(latestUserMessage?.id || null),
                 }),
-                signal: this.abortController.signal
+                signal: combinedSignal
             });
 
             if (!response.ok) {
@@ -2940,9 +2940,25 @@ formatMessage(content, index) {
             this._streamTargetMsg = currentMsg;
             this._streamTextBuffer = '';
             this.first_token = true;
+            const readTimeoutMs = 60000;
+            let streamFinished = false;
             while (true) {
                 if (this.abortController?.signal.aborted) break;
-                const { done, value } = await reader.read();
+                let readResult;
+                try {
+                    readResult = await Promise.race([
+                        reader.read(),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Read timeout')), readTimeoutMs))
+                    ]);
+                } catch (readErr) {
+                    if (readErr.message === 'Read timeout') {
+                        console.error('Stream read timeout, aborting');
+                        this.abortController?.abort();
+                        throw new DOMException('Response stream timed out', 'TimeoutError');
+                    }
+                    throw readErr;
+                }
+                const { done, value } = readResult;
                 if (done) break;
                 buffer += decoder.decode(value, { stream: true });
 
@@ -2953,8 +2969,15 @@ formatMessage(content, index) {
 
                     if (eventData.startsWith('data: ')) {
                         const jsonStr = eventData.slice(6).trim();
-                        if (jsonStr === '[DONE]') break;
-                        const parsed = JSON.parse(jsonStr);
+                        if (!jsonStr) continue;
+                        if (jsonStr === '[DONE]') { streamFinished = true; break; }
+                        let parsed;
+                        try {
+                            parsed = JSON.parse(jsonStr);
+                        } catch (parseErr) {
+                            console.warn('SSE parse error, skipping chunk:', parseErr.message, jsonStr.slice(0, 200));
+                            continue;
+                        }
                         const delta = parsed.choices?.[0]?.delta;
                         if (!delta) continue;
 
@@ -3259,6 +3282,7 @@ formatMessage(content, index) {
                         this.sendMessagesToExtension();
                     }
                 }
+                if (streamFinished) break;
             }
 
             // 循环结束后，强制刷新缓冲区中剩余的文字
@@ -3289,7 +3313,7 @@ formatMessage(content, index) {
 
         } catch (error) {
             console.error(error);
-            if (error.name !== 'AbortError') {
+            if (error.name !== 'AbortError' && error.name !== 'TimeoutError') {
                 showNotification(error.message, 'error');
                 const b = getBlock('error', 'err', 'System Error');
                 b.content = this.truncateDisplayContent(error.message);
@@ -3309,10 +3333,8 @@ formatMessage(content, index) {
             }
             if (audioResolve) audioResolve();
         } finally {
-            if (this.abortController === currentController) {
-                this.isSending = false;
-                this.isTyping = false;
-            }
+            this.isSending = false;
+            this.isTyping = false;
             this.voiceStack = ['default'];
             if (this.allBriefly) currentMsg.briefly = true;
 
