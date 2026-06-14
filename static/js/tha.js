@@ -558,7 +558,7 @@ function startTypewriterLoop() {
             lastUpdateTime = now - (elapsed % interval);
         }
 
-        if (currentVisibleCount >= fullTargetText.length && !isAudioStreaming) {
+        if (currentVisibleCount >= fullTargetText.length && (!isAudioStreaming || (audioQueue.length === 0 && !isPlayingAudio))) {
             typewriterTimer = null;
             isOmniMode = false; 
             finalizeSpeech(false);
@@ -702,6 +702,9 @@ function haltCurrentAudio() {
 async function processAudioQueue() {
   if (audioQueue.length === 0) {
       isPlayingAudio = false;
+      if (!isAudioStreaming && !isOmniMode) {
+          finalizeSpeech(false);
+      }
       return;
   }
   isPlayingAudio = true;
@@ -811,10 +814,6 @@ function handleTTSMessage(msg) {
   }
   else if (type === 'allChunksCompleted') {
       isAudioStreaming = false;
-      if (currentVisibleCount >= fullTargetText.length) {
-          isOmniMode = false;
-          finalizeSpeech(false);
-      }
   }
 }
 

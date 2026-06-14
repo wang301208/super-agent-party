@@ -4051,6 +4051,9 @@ function handleVrmCoreLogic(message) {
         fullTargetText = "";
         currentVisibleCount = 0;
         displayStartIndex = 0;
+        omniNextStartTime = 0;
+        omniTotalAudioDuration = 0;
+        omniPlaybackStartTime = 0;
         stopTypewriterLoop(); // 调用你的停止函数
         clearSubtitle();     // 调用你的清理函数
 
@@ -4247,6 +4250,8 @@ function handleTTSMessage(message) {
                     currentVisibleCount = 0;
                     displayStartIndex = 0;
                     omniNextStartTime = 0;
+                    omniTotalAudioDuration = 0;
+                    omniPlaybackStartTime = 0;
                     stopTypewriterLoop();
                     clearSubtitle();
                 }
@@ -4281,8 +4286,11 @@ function handleTTSMessage(message) {
                     }
                 }
 
-                if (data.audioData) processOmniStreaming(data);
-                startTypewriterLoop();
+                if (data.audioData) {
+                    processOmniStreaming(data).then(() => startTypewriterLoop());
+                } else {
+                    startTypewriterLoop();
+                }
             }
             break;
 
@@ -4306,14 +4314,8 @@ function handleTTSMessage(message) {
             break;
 
         case 'allChunksCompleted':
-            // 核心修改：仅标记 AI 数据输入结束。打字机自会负责完整打印完毕。
+            // 仅标记 AI 数据输入结束。打字机自会负责完整打印完毕。
             isAudioStreaming = false; 
-            
-            // 如果此时字幕已经提前打印完成了，直接收尾
-            if (currentVisibleCount >= fullTargetText.length) {
-                isOmniMode = false;
-                finalizeSpeech(false);
-            }
             break;
             
         case 'chunkEnded':
@@ -4393,7 +4395,7 @@ function startTypewriterLoop() {
             }
 
             // 只有当所有文字均已完整打出，且 AI 流已完全停止时，才安全关闭打字机并收尾
-            if (currentVisibleCount >= fullTargetText.length && !isAudioStreaming) {
+            if (currentVisibleCount >= fullTargetText.length && (!isAudioStreaming || isTextOnlyMode)) {
                 typewriterTimer = null;
                 isOmniMode = false; // 打印彻底结束，释放状态
                 finalizeSpeech(false);
@@ -4409,6 +4411,10 @@ function startTypewriterLoop() {
     function syncTextToAudio() {
         if (!isOmniMode || !currentAudioContext) {
             typewriterTimer = null;
+            if (!currentAudioContext && currentVisibleCount >= totalChars) {
+                isOmniMode = false;
+                finalizeSpeech(false);
+            }
             return;
         }
 
@@ -4432,9 +4438,11 @@ function startTypewriterLoop() {
             }
         }
 
-        if (!isOmniMode || (!isAudioStreaming && currentVisibleCount >= totalChars)) {
+        const audioFinished = !isAudioStreaming || (omniTotalAudioDuration > 0 && now >= omniNextStartTime);
+        if (!isOmniMode || (audioFinished && currentVisibleCount >= totalChars)) {
             typewriterTimer = null;
-            if (!isOmniMode) finalizeSpeech(false);
+            isOmniMode = false;
+            finalizeSpeech(false);
         } else {
             typewriterTimer = requestAnimationFrame(syncTextToAudio);
         }
@@ -4446,7 +4454,7 @@ function startTypewriterLoop() {
 
 function stopTypewriterLoop() {
     if (typewriterTimer) {
-        clearTimeout(typewriterTimer);
+        cancelAnimationFrame(typewriterTimer);
         typewriterTimer = null;
     }
 }
