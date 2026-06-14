@@ -9703,13 +9703,6 @@ processMarkdownStreamForTTS(message, deltaText, isFinal = false) {
             return `<silence>${url}</silence>`;
         });
 
-        // B. 清理/静音非音色定义的其他 HTML 标签 (如 <button>, <img ...>)，防止 TTS 念出 HTML 源码
-        // 🔴 核心修复点 1：使用 Unicode 安全的边界否定断言 (?![a-zA-Z0-9_\u4e00-\u9fa5_-]) 代替 ASCII 的 \b
-        // 确保“星莱”、“旁白”等中文字符后面的“>”或“/”能被正确识别为边界，不会将中文音色标签当成普通 HTML 误杀
-        const voiceTagsPattern = `\\/?(?:${voiceKeys.join('|')})(?![a-zA-Z0-9_\\u4e00-\\u9fa5_-])`;
-        const htmlTagRe = new RegExp(`<(?!(?:${voiceTagsPattern}))[^>]+>`, 'gi');
-        buffer = buffer.replace(htmlTagRe, '');
-
         // 2. 基础清理逻辑 (此时图片已被彻底过滤，在此处安全清理常规超链接，支持多行 [文本](url))
         buffer = buffer
             .replace(/#{1,6}\s/gm, '')
