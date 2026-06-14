@@ -244,6 +244,7 @@ Added a brand-new extension system. You can check available plugins at [plugins 
 | CLI      | heshengtao  |  CLI extension for Super Agent Party           | https://github.com/heshengtao/sap-cli  |
 | LX-music      | heshengtao  | Connect super agent party to LX Music API, let AI companion control music playback! | https://github.com/heshengtao/sap-lx-music  |
 | AI PPT      | heshengtao  | AI PPT extension for Super Agent Party           | https://github.com/heshengtao/sap-ai-ppt  |
+| Lyra 星莱      | heshengtao  | Starlight mage character extension — one-click installs character card, THA model, stickers & background | https://github.com/heshengtao/sap-lyra-extension  |
 
 ## Hardware requirements
 

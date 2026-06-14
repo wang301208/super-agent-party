@@ -1754,4 +1754,6 @@ key3`,
         'THAPet': 'THA 桌宠机器人',
         'thaModel': 'THA 模型',
         'thaButton': 'THA 桌宠',
+        'tha_distill_model': '蒸馏个人THA4模型',
+        'tha_distill_desc': '使用此仓库蒸馏你自己的角色 THA4 ONNX 模型',
     }

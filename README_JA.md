@@ -215,6 +215,7 @@ chmod +x 一键更新(update).sh 一键启动(start).sh
 | CLI      | heshengtao  |  Super Agent Party用CLI拡張機能          | https://github.com/heshengtao/sap-cli  |
 | LX-music      | heshengtao  | super agent party を LX Music API に接続し、AI パートナーが音楽再生を操作できるようにします！ | https://github.com/heshengtao/sap-lx-music  |
 | AI PPT      | heshengtao  | Super Agent Party 向けの AI PPT 拡張プラグイン          | https://github.com/heshengtao/sap-ai-ppt  |
+| Lyra 星莱      | heshengtao  | 星空魔法使いリラのキャラクター拡張 — キャラカード、THAモデル、スタンプ、背景をワンクリックでインストール | https://github.com/heshengtao/sap-lyra-extension  |
 
 ## ハードウェア要件
 

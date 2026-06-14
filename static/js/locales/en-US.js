@@ -1751,4 +1751,6 @@ Key3`,
         'THAPet': 'THA Table Pet Bot',
         'thaModel': 'THA Model',
         'thaButton': 'THA Table Pet',
+        'tha_distill_model': 'Distill your own THA4 model',
+        'tha_distill_desc': 'Use this repo to distill your own character THA4 ONNX model',
     }

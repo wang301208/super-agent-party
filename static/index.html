@@ -15419,6 +15419,34 @@ function updateElement(el, rawMarkdown, formatFn) {
                   </el-dialog>
                   <!-- THA桌宠机器人配置 -->
                   <div v-show="subMenu === 'THA_pet'">
+
+                    <div class="market-link-banner" @click="openRepository('https://github.com/heshengtao/talking-head-anime-4-demo')">
+                      <div class="banner-main">
+                        <div class="banner-icon-box">
+                          <i class="fa-solid fa-hat-wizard"></i>
+                        </div>
+                        <div class="banner-text">
+                          <h3>{{ t('tha_distill_model') }}</h3>
+                          <p>
+                            <el-link
+                              type="primary"
+                              :underline="false"
+                              href="https://github.com/heshengtao/talking-head-anime-4-demo"
+                              target="_blank"
+                            >
+                              <el-icon class="mr-1">
+                                <i class="fa-brands fa-github"></i>
+                              </el-icon>{{ t('tha_distill_desc') }}
+                            </el-link>
+                          </p>
+                        </div>
+                        <div class="banner-action">
+                          <span>GO</span>
+                          <i class="fa-solid fa-arrow-right-long"></i>
+                        </div>
+                      </div>
+                    </div>
+
                     <el-form class="settings-form" :model="THAConfig" label-position="top" style="margin-top: 24px;">
                       <div class="tool-item">
                         <!-- THA桌宠机器人配置头部 -->
