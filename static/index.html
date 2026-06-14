@@ -15498,13 +15498,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                             ></el-switch>
                           </el-form-item>
 
-                          <el-form-item :label="t('enabledMotions')" class="form-item-align" label-position="left">
-                            <el-switch
-                              v-model="THAConfig.enabledMouthSync"
-                              @change="autoSaveSettings"
-                            ></el-switch>
-                          </el-form-item>
-
                           <!-- THA模型选择框 -->
                           <el-form-item :label="t('thaModel')">
                             <el-select

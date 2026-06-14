@@ -580,6 +580,7 @@ function updateSubtitle(text) {
 
 function finalizeSpeech(immediate = false) {
     stopMouthTracking();
+    resetEmotionToNeutral();
     if (immediate) {
         clearSubtitle();
         fullTargetText = "";
@@ -595,6 +596,19 @@ function finalizeSpeech(immediate = false) {
                 displayStartIndex = 0;
             }
         }, 2000); 
+    }
+}
+
+function resetEmotionToNeutral() {
+    if (renderWs && renderWs.readyState === WebSocket.OPEN) {
+        renderWs.send(JSON.stringify({ type: 'emotion', emotion: 'neutral' }));
+        renderWs.send(JSON.stringify({ type: 'motionClear' }));
+    }
+}
+
+function sendMotion(motionName) {
+    if (renderWs && renderWs.readyState === WebSocket.OPEN) {
+        renderWs.send(JSON.stringify({ type: 'motion', motion: motionName }));
     }
 }
 
