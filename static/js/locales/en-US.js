@@ -645,6 +645,7 @@ window.lang_enUS = {
         'Male': 'Male',
         'Female': 'Female',
         'tablePet': 'VRM Table Pet Bot',
+        'thaDesktopPet': 'THA Desktop Pet',
         'table_pet_config': 'VRM Table Pet Config',
         'detailedTutorial': 'Detailed Tutorial',
         'gotoVroid': 'Create in Vroid Studio',
@@ -1749,4 +1750,5 @@ Key3`,
         'dropTHAZipFile':'Click or drag and drop a .zip file here (containing model.onnx + character.png)',
         'THAPet': 'THA Table Pet Bot',
         'thaModel': 'THA Model',
+        'thaButton': 'THA Table Pet',
     }

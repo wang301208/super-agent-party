@@ -13,6 +13,67 @@ import errno
 from py.cli_tool import read_file_tool_local
 from py.task_tools import query_task_progress
 from py.ws_manager import ws_manager
+
+# === Pre-load heavy tool modules at startup to avoid blocking first request ===
+from py.web_search import (
+    DDGsearch, searxng, Tavily_search, Bing_search, Google_search,
+    Brave_search, Exa_search, Serper_search, bochaai_search,
+    jina_crawler, Crawl4Ai_search, firecrawl_search, simple_fetch, markdown_new,
+    duckduckgo_tool, searxng_tool, tavily_tool, bing_tool, google_tool,
+    brave_tool, exa_tool, serper_tool, bochaai_tool,
+    jina_crawler_tool, simple_fetch_tool, Crawl4Ai_tool, firecrawl_tool, markdown_new_tool,
+)
+from py.know_base import kb_tool, query_knowledge_base, rerank_knowledge_base
+from py.agent_tool import get_agent_tool, agent_tool_call
+from py.a2a_tool import get_a2a_tool, a2a_tool_call
+from py.llm_tool import get_llm_tool, custom_llm_tool
+from py.pollinations import (
+    pollinations_image_tool, openai_image_tool, openai_chat_image_tool,
+    pollinations_image, openai_image, openai_chat_image,
+)
+from py.code_interpreter import e2b_code_tool, local_run_code_tool, e2b_code, local_run_code
+from py.custom_http import fetch_custom_http
+from py.comfyui_tool import comfyui_tool_call
+from py.utility_tools import (
+    time_tool, weather_tool, location_tool, timer_weather_tool,
+    wikipedia_summary_tool, wikipedia_section_tool, arxiv_tool,
+    get_weather, get_location_coordinates, get_weather_by_city,
+    get_wikipedia_summary_and_sections, get_wikipedia_section_content, search_arxiv_papers,
+)
+from py.autoBehavior import auto_behavior_tool, auto_behavior
+from py.cdp_tool import (
+    all_cdp_tools, list_pages, navigate_page, new_page, close_page, select_page,
+    take_snapshot, wait_for, click, fill, hover, press_key, evaluate_script,
+    take_screenshot, fill_form, drag, handle_dialog,
+)
+from py.random_topic import random_topics_tools, get_random_topics, get_categories
+from py.computer_use_tool import (
+    computer_use_tools, mouse_use_tools, keyboard_use_tools, desktopVision_use_tools,
+    mouse_move, mouse_click, mouse_double_click, mouse_drag, mouse_scroll, mouse_hold,
+    copy_to_input_box, keyboard_press, keyboard_sequence, keyboard_hotkey, keyboard_hold,
+    logical_type, wait, screenshot, logical_click,
+)
+from py.mode_change import mode_change_tool, update_workspace_settings
+from py.acpx_tools import acp_agent_tool, acpx_agent
+
+# Extended CLI tool imports for dispatch_tool
+from py.cli_tool import (
+    docker_sandbox, list_files_tool, read_file_tool, read_file_range_tool,
+    tail_file_tool, search_files_tool, edit_file_tool, edit_file_patch_tool,
+    glob_files_tool, todo_write_tool, list_processes_tool, get_process_logs_tool,
+    kill_process_tool, docker_manage_ports_tool, read_skill_tool,
+    shell_tool_local, list_files_tool_local, read_file_range_tool_local,
+    tail_file_tool_local, search_files_tool_local, edit_file_tool_local,
+    edit_file_patch_tool_local, glob_files_tool_local, todo_write_tool_local,
+    local_net_tool, send_process_input_tool, read_skill_tool_local,
+    get_tools_for_mode, get_local_tools_for_mode,
+)
+from py.task_tools import (
+    create_subtask_tool, query_tasks_tool, cancel_subtask_tool, finish_task_tool,
+    create_subtask, cancel_subtask, finish_task,
+)
+from py.load_files import get_files_content, file_tool, image_tool
+
 import shortuuid
 os.environ["MEM0_TELEMETRY"] = "False"
 parser = argparse.ArgumentParser(description="Run the ASGI application server.")
@@ -1044,128 +1105,8 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict,is_sub
     global mcp_client_list,_TOOL_HOOKS,HA_client,ChromeMCP_client,sql_client, node_ext_mcp_clients, node_ext_mcp_tools
     print("dispatch_tool",tool_name,tool_params)
     
-    # ==================== 1. 导入所有工具函数 ====================
-    from py.web_search import (
-        DDGsearch, 
-        searxng, 
-        Tavily_search,
-        Bing_search,
-        Google_search,
-        Brave_search,
-        Exa_search,
-        Serper_search,
-        bochaai_search,
-        jina_crawler,
-        Crawl4Ai_search, 
-        firecrawl_search,
-        simple_fetch,
-        markdown_new,
-    )
-    from py.know_base import query_knowledge_base
-    from py.agent_tool import agent_tool_call
-    from py.a2a_tool import a2a_tool_call
-    from py.llm_tool import custom_llm_tool
-    from py.pollinations import pollinations_image,openai_image,openai_chat_image
-    from py.load_files import get_file_content
-    from py.code_interpreter import e2b_code,local_run_code
-    from py.custom_http import fetch_custom_http
-    from py.comfyui_tool import comfyui_tool_call
-    from py.utility_tools import (
-        time,
-        get_weather,
-        get_location_coordinates,
-        get_weather_by_city,
-        get_wikipedia_summary_and_sections,
-        get_wikipedia_section_content,
-        search_arxiv_papers
-    )
-    from py.autoBehavior import auto_behavior
-
-    # Docker CLI 工具（原有）
-    from py.cli_tool import (
-        docker_sandbox,
-        list_files_tool,
-        read_file_tool,
-        read_file_range_tool, 
-        tail_file_tool,     
-        search_files_tool,
-        edit_file_tool,
-        edit_file_patch_tool, 
-        glob_files_tool,       
-        todo_write_tool, 
-        list_processes_tool,
-        get_process_logs_tool,
-        kill_process_tool,
-        docker_manage_ports_tool,
-        read_skill_tool,
-    )
-
-    # 新增：本地环境 CLI 工具（假设保存在 py/local_cli_tool.py）
-    from py.cli_tool import (
-        shell_tool_local,           # 本地 bash 执行（对应 docker_sandbox）
-        list_files_tool_local,     # 本地文件列表
-        read_file_tool_local,      # 本地文件读取
-        read_file_range_tool_local, # <--- 新增导入
-        tail_file_tool_local,       # <--- 新增导入
-        search_files_tool_local,   # 本地文件搜索
-        edit_file_tool_local,      # 本地文件写入
-        edit_file_patch_tool_local,# 本地精确替换
-        glob_files_tool_local,     # 本地 glob 查找
-        todo_write_tool_local,     # 本地任务管理
-        local_net_tool,            # 本地网络工具
-        send_process_input_tool,
-        read_skill_tool_local,
-    )
-
-    from py.cdp_tool import (
-        list_pages,
-        navigate_page,
-        new_page,
-        close_page,
-        select_page,
-        take_snapshot,
-        wait_for,
-        click,
-        fill,
-        hover,
-        press_key,
-        evaluate_script,
-        take_screenshot,
-        fill_form,
-        drag,
-        handle_dialog
-    )
-    from py.random_topic import get_random_topics,get_categories
-
-    from py.task_tools import (
-        create_subtask,
-        query_task_progress,
-        cancel_subtask,
-        finish_task
-    )
-    
-    from py.computer_use_tool import (
-        mouse_move,
-        mouse_click,
-        mouse_double_click,
-        mouse_drag,
-        mouse_scroll,
-        mouse_hold,
-        copy_to_input_box,
-        keyboard_press,
-        keyboard_sequence,
-        keyboard_hotkey,
-        keyboard_hold,
-        logical_type,
-        wait,
-        screenshot,
-        logical_click,
-    )
-
-    from py.mode_change import update_workspace_settings
-    from py.acpx_tools import acpx_agent
-
-    # ==================== 2. 定义工具映射表 ====================
+    from py.utility_tools import time
+    # ==================== 1. 定义工具映射表 ====================
     _TOOL_HOOKS = {
         "DDGsearch": DDGsearch,
         "searxng": searxng,
@@ -2355,6 +2296,25 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
         )
         content_append(request.messages, 'system', Motion_messages)
 
+    # THA 表情/动作（固定）
+    if settings.get('THAConfig', {}).get('enabledEmotions') and not request.is_app_bot and not request.is_sub_agent:
+        from py.tha_engine import THA_MOTIONS
+        motion_names = list(THA_MOTIONS.keys())
+        motion_tags = [f"<{m}>" for m in motion_names]
+        THA_Expression_messages = (
+            "\n\n你可以通过以下标签控制 THA 桌面宠物：\n\n"
+            "【表情标签】<happy> <angry> <sad> <neutral> <surprised> <relaxed>\n"
+            f"【动作标签】{', '.join(motion_tags)}\n\n"
+            "使用方法：将标签放在句子开头（如果有音色标签，就放到音色标签之后即可），例如：\n"
+            "<angry>我真的生气了。<surprised>哇！<happy>我好开心。<nod>好的，没问题！\n\n"
+            "规则：\n"
+            "1. 表情标签会影响后续所有句子，直到切换为新的表情\n"
+            "2. 动作标签是一次性的，只影响当前这句话\n"
+            "3. 表情和动作可以同时使用，例如：<happy><nod>太棒了！\n"
+            "4. 标签必须与句子在同一行，中间有换行符则不会生效\n\n"
+        )
+        content_append(request.messages, 'system', THA_Expression_messages)
+
     # TTS 规则（固定，原用 prepend 改为 append）
     newttsList = []
     Narrator_label = "Narrator"
@@ -3355,62 +3315,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
         # =========================================================================
         images = await images_in_messages(request.messages,fastapi_base_url)
         request.messages = await message_without_images(request.messages)
-        from py.load_files import get_files_content,file_tool,image_tool
-        from py.web_search import (
-            DDGsearch, 
-            searxng, 
-            Tavily_search,
-            Bing_search,
-            Google_search,
-            Brave_search,
-            Exa_search,
-            Serper_search,
-            bochaai_search,
-            duckduckgo_tool, 
-            searxng_tool, 
-            tavily_tool, 
-            bing_tool,
-            google_tool,
-            brave_tool,
-            exa_tool,
-            serper_tool,
-            bochaai_tool,
-            jina_crawler_tool, 
-            simple_fetch_tool,
-            Crawl4Ai_tool,
-            firecrawl_tool,
-            markdown_new_tool,
-        )
-        from py.know_base import kb_tool,query_knowledge_base,rerank_knowledge_base
-        from py.agent_tool import get_agent_tool
-        from py.a2a_tool import get_a2a_tool
-        from py.llm_tool import get_llm_tool
-        from py.pollinations import pollinations_image_tool,openai_image_tool,openai_chat_image_tool
-        from py.code_interpreter import e2b_code_tool,local_run_code_tool
-        from py.utility_tools import (
-            time_tool, 
-            weather_tool,
-            location_tool,
-            timer_weather_tool,
-            wikipedia_summary_tool,
-            wikipedia_section_tool,
-            arxiv_tool 
-        ) 
-        from py.autoBehavior import auto_behavior_tool
-        from py.cli_tool import get_tools_for_mode,get_local_tools_for_mode
-        from py.cdp_tool import all_cdp_tools
-        from py.random_topic import random_topics_tools
-        from py.computer_use_tool import computer_use_tools,mouse_use_tools,keyboard_use_tools,desktopVision_use_tools
-
-        from py.task_tools import (
-            create_subtask_tool,
-            query_tasks_tool,
-            cancel_subtask_tool,
-            finish_task_tool,
-        )
-
-        from py.mode_change import mode_change_tool
-        from py.acpx_tools import acp_agent_tool
 
         m0 = None
         memoryId = None
@@ -5610,56 +5514,6 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
         request.messages = ensure_thinking_fields(request.messages)
         # =========================================================================
 
-    from py.load_files import get_files_content,file_tool,image_tool
-    from py.web_search import (
-        DDGsearch, 
-        searxng, 
-        Tavily_search,
-        Bing_search,
-        Google_search,
-        Brave_search,
-        Exa_search,
-        Serper_search,
-        bochaai_search,
-        duckduckgo_tool, 
-        searxng_tool, 
-        tavily_tool, 
-        bing_tool,
-        google_tool,
-        brave_tool,
-        exa_tool,
-        serper_tool,
-        bochaai_tool,
-        jina_crawler_tool, 
-        simple_fetch_tool,
-        Crawl4Ai_tool,
-        firecrawl_tool,
-        markdown_new_tool,
-    )
-    from py.know_base import kb_tool,query_knowledge_base,rerank_knowledge_base
-    from py.agent_tool import get_agent_tool
-    from py.a2a_tool import get_a2a_tool
-    from py.llm_tool import get_llm_tool
-    from py.pollinations import pollinations_image_tool,openai_image_tool,openai_chat_image_tool
-    from py.code_interpreter import e2b_code_tool,local_run_code_tool
-    from py.utility_tools import time_tool
-    from py.utility_tools import (
-        time_tool, 
-        weather_tool,
-        location_tool,
-        timer_weather_tool,
-        wikipedia_summary_tool,
-        wikipedia_section_tool,
-        arxiv_tool
-    ) 
-    from py.autoBehavior import auto_behavior_tool
-    from py.cli_tool import get_tools_for_mode,get_local_tools_for_mode
-    from py.cdp_tool import all_cdp_tools
-    from py.random_topic import random_topics_tools
-    from py.computer_use_tool import computer_use_tools,mouse_use_tools,keyboard_use_tools,desktopVision_use_tools
-    
-    from py.mode_change import mode_change_tool
-    from py.acpx_tools import acp_agent_tool
     m0 = None
     if settings["memorySettings"]["is_memory"] and settings["memorySettings"]["selectedMemory"] and settings["memorySettings"]["selectedMemory"] != "":
         memoryId = settings["memorySettings"]["selectedMemory"]
@@ -8093,13 +7947,17 @@ class TTSConnectionManager:
                 except: self.disconnect_overlay(conn)
 
     async def broadcast_emotion_to_tha(self, emotion: str):
-        """直接向所有 THA 姿态生成器发送表情指令"""
+        """直接向所有 THA 姿态生成器发送表情/动作指令"""
+        from py.tha_engine import THA_MOTIONS
         conns = list(self.tha_connections)
         for conn in conns:
             try:
                 gen = getattr(conn, '_tha_gen', None)
                 if gen:
-                    gen.set_emotion(emotion)
+                    if emotion in THA_MOTIONS:
+                        gen.set_motion(emotion)
+                    else:
+                        gen.set_emotion(emotion)
             except:
                 self.disconnect_tha(conn)
 
@@ -8237,10 +8095,11 @@ async def vrm_websocket_endpoint(websocket: WebSocket):
                 if data.get('type') == 'animationComplete':
                     await tts_manager.send_to_main(msg["text"])
             # VRM 窗口通常不主动给主窗口发二进制，所以这里暂不处理 bytes
-    except WebSocketDisconnect:
-        tts_manager.disconnect_vrm(websocket)
+    except (WebSocketDisconnect, RuntimeError):
+        pass
     except Exception as e:
         logging.error(f"WS error in VRM: {e}")
+    finally:
         tts_manager.disconnect_vrm(websocket)
 
 @app.websocket("/ws/tha")
@@ -8300,12 +8159,16 @@ async def tha_websocket_endpoint(websocket: WebSocket):
                     cmd_type = data.get("type", "")
                     if cmd_type == "emotion":
                         gen.set_emotion(data.get("emotion", "neutral"))
+                    elif cmd_type == "motion":
+                        gen.set_motion(data.get("motion", ""))
+                    elif cmd_type == "motionClear":
+                        gen.clear_motion()
                     elif cmd_type == "mouth":
                         gen.set_mouth(float(data.get("amplitude", 0)))
                     elif cmd_type == "mouse":
                         gen.set_mouse(float(data.get("x", 0)), float(data.get("y", 0)))
             except WebSocketDisconnect:
-                raise
+                return
             except Exception as e:
                 logging.error(f"[THA WS] Instruction receive error: {e}")
 
@@ -8320,7 +8183,6 @@ async def tha_websocket_endpoint(websocket: WebSocket):
                     start_time = time.perf_counter()
                     
                     pose = gen.step()
-                    # 使用线程池异步渲染，保证主事件循环通畅
                     jpeg = await loop.run_in_executor(None, engine.render, pose)
                     
                     await websocket.send_bytes(jpeg)
@@ -8329,7 +8191,7 @@ async def tha_websocket_endpoint(websocket: WebSocket):
                     sleep_time = max(0.0, frame_interval - elapsed)
                     await asyncio.sleep(sleep_time)
             except WebSocketDisconnect:
-                raise
+                return
             except Exception as e:
                 logging.error(f"[THA WS] Frame render error: {e}")
 

@@ -64,6 +64,49 @@ EMOTION_POSE_MAP["relaxed"] = _make_pose(
 # neutral 清零
 EMOTION_POSE_MAP["neutral"] = np.zeros(45, dtype=np.float32)
 
+# ------------------------------------------------------------
+# 2b. 动作 -> 45维参数映射表（一次性动画，叠加在基础姿态之上）
+# ------------------------------------------------------------
+#   type "oscillate": sin 振荡动画
+#   type "hold":      保持在目标值一段时间后回弹
+THA_MOTIONS: Dict[str, dict] = {
+    "nod": {
+        "params": {39: 0.55},       # head_x 上下点头
+        "type": "oscillate",
+        "duration": 1.4,
+        "frequency": 2.8,
+    },
+    "shakeHead": {
+        "params": {40: 0.5},        # head_y 左右摇头
+        "type": "oscillate",
+        "duration": 1.0,
+        "frequency": 3.5,
+    },
+    "tiltHead": {
+        "params": {41: 0.55},       # neck_z 歪头
+        "type": "oscillate",
+        "duration": 1.2,
+        "frequency": 2.2,
+    },
+    "bow": {
+        "params": {43: 0.6},        # body_z 身体前倾（鞠躬）
+        "type": "hold",
+        "duration": 1.5,
+    },
+    "sway": {
+        "params": {42: 0.45},       # body_y 身体左右摇摆
+        "type": "oscillate",
+        "duration": 1.5,
+        "frequency": 2.0,
+    },
+    "lookAround": {
+        "params": {38: 0.7, 37: 0.4},  # 眼珠转动 + 微微抬头
+        "type": "oscillate",
+        "duration": 2.0,
+        "frequency": 1.5,
+    },
+}
+
 
 # ------------------------------------------------------------
 # 3. THAPoseGenerator — 空闲动画 + 情感/口型混合
@@ -98,6 +141,11 @@ class THAPoseGenerator:
         # 前端算出来的 8Hz 高频振幅会被毫无保留、极其敏捷地百分之百执行！
         self._mouth_smooth = 120.0
 
+        # 动作（一次性动画）
+        self._motion_name = None
+        self._motion_timer = 0.0
+        self._motion_data = {}
+
     def _rb(self):
         return 2.0 + np.random.random() * 4.0
 
@@ -113,6 +161,17 @@ class THAPoseGenerator:
         """设置鼠标位置"""
         self._mouse_x = float(x)
         self._mouse_y = float(y)
+
+    def set_motion(self, motion_name: str):
+        """触发一次性动作动画"""
+        if motion_name in THA_MOTIONS:
+            self._motion_name = motion_name
+            self._motion_timer = 0.0
+            self._motion_data = THA_MOTIONS[motion_name]
+
+    def clear_motion(self):
+        """立即终止当前动作"""
+        self._motion_name = None
 
     def step(self) -> np.ndarray:
         now = time.perf_counter()
@@ -190,6 +249,34 @@ class THAPoseGenerator:
 
         # 混合口型
         p += self._mouth_amplitude * _get_mouth_pose()
+
+        # 混合动作（一次性动画，叠加覆盖）
+        if self._motion_name:
+            self._motion_timer += dt
+            dur = self._motion_data.get("duration", 1.5)
+            progress = min(self._motion_timer / dur, 1.0)
+            mtype = self._motion_data.get("type", "oscillate")
+            freq = self._motion_data.get("frequency", 2.0)
+
+            if mtype == "oscillate":
+                # sin 振荡 + 淡入淡出包络
+                envelope = math.sin(progress * math.pi)
+                wave = math.sin(self._motion_timer * freq * 2.0 * math.pi)
+                motion_val = envelope * wave
+            else:  # hold
+                # 缓入 -> 保持 -> 缓出
+                if progress < 0.2:
+                    motion_val = progress / 0.2
+                elif progress < 0.7:
+                    motion_val = 1.0
+                else:
+                    motion_val = 1.0 - (progress - 0.7) / 0.3
+
+            for idx, scale in self._motion_data.get("params", {}).items():
+                p[idx] += motion_val * scale
+
+            if progress >= 1.0:
+                self._motion_name = None
 
         return p
 

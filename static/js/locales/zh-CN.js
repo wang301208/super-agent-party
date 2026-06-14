@@ -648,6 +648,7 @@ window.lang_zhCN = {
         'Male': '男',
         'Female': '女',
         'tablePet': 'VRM桌宠机器人',
+        'thaDesktopPet': 'THA桌宠',
         'table_pet_config': 'VRM桌宠配置',
         'detailedTutorial': '详细教程',
         'gotoVroid': '在Vroid Studio中创建VRM',
@@ -1752,4 +1753,5 @@ key3`,
         'dropTHAZipFile':'点击或拖放 .zip 文件到此处（包含 model.onnx + character.png）',
         'THAPet': 'THA 桌宠机器人',
         'thaModel': 'THA 模型',
+        'thaButton': 'THA 桌宠',
     }

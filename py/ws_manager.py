@@ -6,6 +6,8 @@ from fastapi import WebSocket
 
 logger = logging.getLogger("app")
 
+MAX_WS_MESSAGE_SIZE = 5 * 1024 * 1024  # 5MB limit to prevent renderer crash
+
 class ConnectionManager:
     def __init__(self):
         # 维护所有活跃的 WebSocket 连接
@@ -22,6 +24,10 @@ class ConnectionManager:
     async def send_json(self, message: dict, websocket: WebSocket):
         """向特定连接发送消息"""
         try:
+            json_str = json.dumps(message, ensure_ascii=False)
+            if len(json_str) > MAX_WS_MESSAGE_SIZE:
+                logger.warning(f"WebSocket message too large ({len(json_str)} bytes), skipping send")
+                return
             await websocket.send_json(message)
         except Exception as e:
             logger.error(f"发送消息失败: {e}")
@@ -29,6 +35,13 @@ class ConnectionManager:
 
     async def broadcast(self, message: dict, exclude: Optional[WebSocket] = None):
         """向所有连接广播消息，可选排除某个连接"""
+        try:
+            json_str = json.dumps(message, ensure_ascii=False)
+            if len(json_str) > MAX_WS_MESSAGE_SIZE:
+                logger.warning(f"Broadcast message too large ({len(json_str)} bytes), skipping")
+                return
+        except Exception:
+            return
         # 使用切片副本遍历，防止在循环中删除元素导致报错
         for connection in self.active_connections[:]:
             if connection == exclude:

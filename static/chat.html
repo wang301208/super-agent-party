@@ -1701,6 +1701,17 @@ function updateElement(el, rawMarkdown, formatFn) {
                         </el-button>
                       </el-tooltip>
 
+                      <el-tooltip :content="t('thaDesktopPet')" placement="top">
+                        <el-button
+                          @click="startTHA"
+                          class="icon-btn tha-btn"
+                          :type="'default'"
+                          v-if="MoreButtonDict.find(b => b.name === 'thaButton')?.enabled&&!isCapsuleMode"
+                          circle>
+                          <i :class='isTHAStarting? "fa-solid fa-spinner fa-spin" : "fa-solid fa-hat-wizard"'></i>
+                        </el-button>
+                      </el-tooltip>
+
                       <el-tooltip :content="t('enableAutoBehavior')" placement="top">
                         <el-button
                           @click="behaviorSettings.enabled=!behaviorSettings.enabled; autoSaveSettings();"

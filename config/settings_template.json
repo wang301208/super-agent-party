@@ -409,6 +409,7 @@
       {"name": "httpButton", "enabled": false},
       {"name": "comfyuiButton", "enabled": false},
       {"name": "vrmButton", "enabled": true},
+      {"name": "thaButton", "enabled": true},
       {"name": "behaviorBotton", "enabled": false},
       {"name": "groupChatBotton", "enabled": true}
     ],
@@ -441,7 +442,8 @@
       {"name": "a2aButton", "enabled": false},
       {"name": "httpButton", "enabled": false},
       {"name": "comfyuiButton", "enabled": false},
-      {"name": "vrmButton", "enabled": true},
+      {"name": "vrmButton", "enabled": false},
+      {"name": "thaButton", "enabled": false},
       {"name": "behaviorBotton", "enabled": false},
       {"name": "groupChatBotton", "enabled": false}
     ],

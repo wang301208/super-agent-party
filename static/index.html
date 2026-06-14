@@ -1847,6 +1847,17 @@ function updateElement(el, rawMarkdown, formatFn) {
                         </el-button>
                       </el-tooltip>
 
+                      <el-tooltip :content="t('thaDesktopPet')" placement="top">
+                        <el-button
+                          @click="startTHA"
+                          class="icon-btn tha-btn"
+                          :type="'default'"
+                          v-if="MoreButtonDict.find(b => b.name === 'thaButton')?.enabled&&!isCapsuleMode"
+                          circle>
+                          <i :class='isTHAStarting? "fa-solid fa-spinner fa-spin" : "fa-solid fa-hat-wizard"'></i>
+                        </el-button>
+                      </el-tooltip>
+
                       <el-tooltip :content="t('enableAutoBehavior')" placement="top">
                         <el-button
                           @click="behaviorSettings.enabled=!behaviorSettings.enabled; autoSaveSettings();"
@@ -15498,13 +15509,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                             ></el-switch>
                           </el-form-item>
 
-                          <el-form-item :label="t('enabledMotions')" class="form-item-align" label-position="left">
-                            <el-switch
-                              v-model="THAConfig.enabledMouthSync"
-                              @change="autoSaveSettings"
-                            ></el-switch>
-                          </el-form-item>
-
                           <!-- THA模型选择框 -->
                           <el-form-item :label="t('thaModel')">
                             <el-select
@@ -17842,6 +17846,17 @@ function updateElement(el, rawMarkdown, formatFn) {
                                 v-if="MoreButtonDict.find(b => b.name === 'vrmButton')?.enabled&&!isCapsuleMode"
                                 circle>
                                 <i :class='isVRMStarting? "fa-solid fa-spinner fa-spin" : "fa-solid fa-user-ninja"'></i>
+                              </el-button>
+                            </el-tooltip>
+
+                            <el-tooltip :content="t('thaDesktopPet')" placement="top">
+                              <el-button
+                                @click="startTHA"
+                                class="icon-btn tha-btn"
+                                :type="'default'"
+                                v-if="MoreButtonDict.find(b => b.name === 'thaButton')?.enabled&&!isCapsuleMode"
+                                circle>
+                                <i :class='isTHAStarting? "fa-solid fa-spinner fa-spin" : "fa-solid fa-hat-wizard"'></i>
                               </el-button>
                             </el-tooltip>
 

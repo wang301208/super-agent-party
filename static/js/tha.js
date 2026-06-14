@@ -258,7 +258,6 @@ document.addEventListener('mousemove', (e) => {
       isModelHiddenByHover = true;
       app.view.style.transition = 'opacity 150ms ease';
       app.view.style.opacity = '0';
-      if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
   }
 });
 
@@ -271,7 +270,6 @@ document.addEventListener('mouseleave', () => {
       isModelHiddenByHover = false;
       app.view.style.transition = 'opacity 150ms ease';
       app.view.style.opacity = '1';
-      if (!isLocked && window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false);
   }
 });
 
@@ -308,10 +306,20 @@ document.body.addEventListener('touchstart', (e) => {
 controlPanel.addEventListener('mouseenter', () => {
   isPanelHovered = true; clearTimeout(hideTimeout); showPanel();
   if (isLocked && window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false);
+  if (isAutoHideEnabled && !isLocked && isModelHiddenByHover) {
+    isModelHiddenByHover = false;
+    app.view.style.transition = 'opacity 150ms ease';
+    app.view.style.opacity = '1';
+  }
 });
 controlPanel.addEventListener('mouseleave', () => {
   isPanelHovered = false; scheduleHide();
   if (isLocked && window.electronAPI) window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
+  if (isAutoHideEnabled && !isLocked && !isModelHiddenByHover) {
+    isModelHiddenByHover = true;
+    app.view.style.transition = 'opacity 150ms ease';
+    app.view.style.opacity = '0';
+  }
 });
 scheduleHide();
 
@@ -550,7 +558,7 @@ function startTypewriterLoop() {
             lastUpdateTime = now - (elapsed % interval);
         }
 
-        if (currentVisibleCount >= fullTargetText.length && !isAudioStreaming) {
+        if (currentVisibleCount >= fullTargetText.length && (!isAudioStreaming || (audioQueue.length === 0 && !isPlayingAudio))) {
             typewriterTimer = null;
             isOmniMode = false; 
             finalizeSpeech(false);
@@ -580,6 +588,7 @@ function updateSubtitle(text) {
 
 function finalizeSpeech(immediate = false) {
     stopMouthTracking();
+    resetEmotionToNeutral();
     if (immediate) {
         clearSubtitle();
         fullTargetText = "";
@@ -595,6 +604,19 @@ function finalizeSpeech(immediate = false) {
                 displayStartIndex = 0;
             }
         }, 2000); 
+    }
+}
+
+function resetEmotionToNeutral() {
+    if (renderWs && renderWs.readyState === WebSocket.OPEN) {
+        renderWs.send(JSON.stringify({ type: 'emotion', emotion: 'neutral' }));
+        renderWs.send(JSON.stringify({ type: 'motionClear' }));
+    }
+}
+
+function sendMotion(motionName) {
+    if (renderWs && renderWs.readyState === WebSocket.OPEN) {
+        renderWs.send(JSON.stringify({ type: 'motion', motion: motionName }));
     }
 }
 
@@ -680,6 +702,9 @@ function haltCurrentAudio() {
 async function processAudioQueue() {
   if (audioQueue.length === 0) {
       isPlayingAudio = false;
+      if (!isAudioStreaming && !isOmniMode) {
+          finalizeSpeech(false);
+      }
       return;
   }
   isPlayingAudio = true;
@@ -789,10 +814,6 @@ function handleTTSMessage(msg) {
   }
   else if (type === 'allChunksCompleted') {
       isAudioStreaming = false;
-      if (currentVisibleCount >= fullTargetText.length) {
-          isOmniMode = false;
-          finalizeSpeech(false);
-      }
   }
 }
 
