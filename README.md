@@ -44,7 +44,7 @@
 ![image](doc/image/img-2/vts.jpeg)
 
 #### High-freedom chat interface: custom background images, emoji packs, character personas, THA-based 2D character avatars, and character MCP tools for a more immersive conversation
-![image](doc/image/img-2/THA.jpeg)
+![image](doc/image/img-2/tha4.jpeg)
 
 #### Task Center: Enable your AI agents to perform any advanced tasks in the background, automatically control your computer to get work done, supporting MCP and Agent Skills.
 ![image](doc/image/img-2/task.jpeg)
