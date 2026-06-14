@@ -488,6 +488,18 @@ async def load_settings():
                     asyncio.create_task(save_settings(user_settings))
                 return user_settings
             else:
+                # 尝试从旧 settings.json 迁移（兼容旧版本数据）
+                if os.path.exists(SETTINGS_FILE):
+                    try:
+                        with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                            user_settings = json.load(f)
+                        logging.info(f"从旧版 settings.json 迁移用户设置: {SETTINGS_FILE}")
+                        merge_defaults(defaults, user_settings)
+                        await save_settings(user_settings)
+                        return user_settings
+                    except Exception as e:
+                        logging.warning(f"从旧版 settings.json 迁移失败: {e}")
+                
                 if IS_DOCKER:
                     defaults["isdocker"] = True
                 await save_settings(defaults)
