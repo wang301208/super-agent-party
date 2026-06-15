@@ -3877,7 +3877,7 @@ function addcontrolPanel() {
         
         function scheduleHide() {
             clearTimeout(hideTimeout);
-            hideTimeout = setTimeout(hideControlPanel, 3000); // 移动端建议延长时间到3秒更方便操作
+            hideTimeout = setTimeout(hideControlPanel, isMouseLocked ? 200 : 1200);
         }
         
         document.body.addEventListener('mouseenter', () => { showControlPanel(); });
@@ -3927,7 +3927,7 @@ function addcontrolPanel() {
             clearTimeout(mouseStopTimeout);
             mouseStopTimeout = setTimeout(() => {
                 if (!isControlPanelHovered) hideControlPanel();
-            }, 3000); 
+            }, isMouseLocked ? 200 : 1200); 
         });
         
         scheduleHide();

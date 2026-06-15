@@ -305,35 +305,57 @@ class THAEngine:
         
         # 🌟 优化：预分配不变量，避免循环重复分配内存带来的 GC 压力
         self.green_bg = np.array([0.0, 255.0, 0.0], dtype=np.float32).reshape(3, 1, 1)
+        # 🌟 缓存输出格式，跳过每帧 np.min() 检测
+        self._out_is_uint8: Optional[bool] = None
+        self._out_range_neg: Optional[bool] = None
+        self._inv255: float = 1.0 / 255.0
 
     def load(self):
         """加载 ONNX 模型和角色纹理"""
         if self._loaded:
             return
             
-        # 获取当前环境中所有可用的 ONNX Provider
         available_providers = ort.get_available_providers()
         
-        # 按照我们期望的性能优先级排序
-        preferred_order = [
-            "CUDAExecutionProvider",    # Linux/Windows (Nvidia GPU)
-            "DmlExecutionProvider",     # Windows (DirectX: AMD/Intel/Nvidia)
-            "CoreMLExecutionProvider",  # macOS (Apple Silicon)
-            "CPUExecutionProvider"      # Fallback
+        provider_options = [
+            ("TensorrtExecutionProvider", {
+                "trt_fp16_enable": True,
+                "trt_engine_cache_enable": True,
+                "device_id": 0,
+            }),
+            ("CUDAExecutionProvider", {
+                "arena_extend_strategy": "kSameAsRequested",
+                "cudnn_conv_algo_search": "DEFAULT",
+                "do_copy_in_default_stream": True,
+                "gpu_mem_limit": 2 * 1024 * 1024 * 1024,
+            }),
+            ("ROCMExecutionProvider", {
+                "arena_extend_strategy": "kSameAsRequested",
+                "gpu_mem_limit": 2 * 1024 * 1024 * 1024,
+            }),
+            ("DmlExecutionProvider", {}),
+            ("CoreMLExecutionProvider", {}),
+            ("CPUExecutionProvider", {}),
         ]
         
-        # 筛选出当前系统实际支持的 Providers
-        providers = [p for p in preferred_order if p in available_providers]
+        providers = []
+        for p_name, p_opts in provider_options:
+            if p_name in available_providers:
+                providers.append((p_name, p_opts) if p_opts else p_name)
         
         if not providers:
             providers = ["CPUExecutionProvider"]
-
+        
+        sess_opts = ort.SessionOptions()
+        sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        sess_opts.enable_mem_pattern = True
+        sess_opts.enable_cpu_mem_arena = True
+        
         try:
-            # 尝试使用最高优先级的硬件加速加载模型
-            self.session = ort.InferenceSession(self.model_path, providers=providers)
+            self.session = ort.InferenceSession(self.model_path, sess_opts, providers=providers)
         except Exception as e:
             logger.warning(f"[THA] 硬件加速加载失败，尝试强制回退到 CPU... 错误信息: {e}")
-            self.session = ort.InferenceSession(self.model_path, providers=["CPUExecutionProvider"])
+            self.session = ort.InferenceSession(self.model_path, sess_opts, providers=["CPUExecutionProvider"])
             
         active_provider = self.session.get_providers()[0]
         
@@ -363,44 +385,53 @@ class THAEngine:
         img_data = out[0]  # (C, 512, 512)  CHW
 
         C = img_data.shape[0]
+        _clip = np.clip  # 本地引用，减少属性查找
 
         if C == 4:
             # ── RGBA 模型：需合成为绿幕 ──
             rgb = img_data[:3, :, :]
             alpha = img_data[3, :, :]
 
-            if img_data.dtype == np.uint8:
-                alpha_f = alpha.astype(np.float32)[np.newaxis, :, :] / 255.0
+            if self._out_is_uint8 is None:
+                self._out_is_uint8 = (img_data.dtype == np.uint8)
+                if not self._out_is_uint8:
+                    self._out_range_neg = (np.min(rgb) < -0.1)
+
+            if self._out_is_uint8:
+                alpha_f = alpha.astype(np.float32)[np.newaxis, :, :] * self._inv255
                 result = rgb.astype(np.float32) * alpha_f \
                          + self.green_bg * (1.0 - alpha_f)
-                result = np.clip(result, 0, 255).astype(np.uint8)
+                result = _clip(result, 0, 255).astype(np.uint8)
             else:
-                r_min, a_min = np.min(rgb), np.min(alpha)
-                if r_min < -0.1:
+                if self._out_range_neg:
                     rgb = (rgb + 1.0) * 127.5
+                    alpha = (alpha + 1.0) * 0.5
                 else:
                     rgb = rgb * 255.0
-                if a_min < -0.1:
-                    alpha = (alpha + 1.0) * 0.5
                 alpha = alpha[np.newaxis, :, :]
                 result = rgb * alpha + self.green_bg * (1.0 - alpha)
-                result = np.clip(result, 0, 255).astype(np.uint8)
+                result = _clip(result, 0, 255).astype(np.uint8)
 
         elif C == 3:
             # ── 3 通道绿幕模型（model.onnx 默认走这里）──
-            if img_data.dtype == np.uint8:
+            if self._out_is_uint8 is None:
+                self._out_is_uint8 = (img_data.dtype == np.uint8)
+                if not self._out_is_uint8:
+                    self._out_range_neg = (np.min(img_data) < -0.1)
+
+            if self._out_is_uint8:
                 result = img_data
             else:
-                if np.min(img_data) < -0.1:
-                    result = np.clip((img_data + 1.0) * 127.5, 0, 255).astype(np.uint8)
+                if self._out_range_neg:
+                    result = _clip((img_data + 1.0) * 127.5, 0, 255).astype(np.uint8)
                 else:
-                    result = np.clip(img_data * 255.0, 0, 255).astype(np.uint8)
+                    result = _clip(img_data * 255.0, 0, 255).astype(np.uint8)
 
         else:
             raise RuntimeError(f"Unsupported channel count: {C}")
 
         rgb_out = np.ascontiguousarray(result.transpose(1, 2, 0))
-        return simplejpeg.encode_jpeg(rgb_out, quality=75, colorspace='RGB')
+        return simplejpeg.encode_jpeg(rgb_out, quality=50, colorspace='RGB', colorsubsampling='422')
 
     @property
     def loaded(self) -> bool:
@@ -450,6 +481,12 @@ class THAModelManager:
             safe_name = f"model_{uuid.uuid4().hex[:8]}"
 
         target_dir = os.path.join(self.user_upload_dir, safe_name)
+        # 安全检查: 确保目标目录在预期的用户上传目录内
+        abs_target = os.path.abspath(target_dir)
+        abs_user_dir = os.path.abspath(self.user_upload_dir)
+        if not abs_target.startswith(abs_user_dir + os.sep) and abs_target != abs_user_dir:
+            return False, "非法的模型目录路径", {}
+        
         if os.path.exists(target_dir):
             import shutil
             shutil.rmtree(target_dir)
@@ -500,7 +537,14 @@ class THAModelManager:
 
     def delete_model(self, model_id: str) -> bool:
         target_dir = os.path.join(self.user_upload_dir, model_id)
-        if os.path.exists(target_dir) and target_dir.startswith(os.path.abspath(self.user_upload_dir)):
+        abs_target = os.path.abspath(target_dir)
+        abs_user_dir = os.path.abspath(self.user_upload_dir)
+        # 安全检查: 确保目标目录在预期的用户上传目录内，且不是根目录
+        if os.path.exists(target_dir) and os.path.isdir(target_dir) and (abs_target.startswith(abs_user_dir + os.sep) or abs_target == abs_user_dir + os.sep + model_id):
+            # 额外检查: 确保目录包含 THA 模型文件(model.onnx)，防止误删非THA目录
+            onnx_path = os.path.join(target_dir, "model.onnx")
+            if not os.path.exists(onnx_path):
+                return False
             import shutil
             shutil.rmtree(target_dir)
             return True

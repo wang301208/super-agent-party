@@ -184,7 +184,10 @@ function initPixi() {
   } catch (e) {}
 }
 
-// ==================== Render (显存泄漏修复) ====================
+// ==================== Render (帧跳跃 + 显存泄漏修复) ====================
+let _framePending = false;
+let _lastFrameTime = 0;
+
 function updateSprite(texture) {
   if (!sprite || !app || !app.screen.width) return false;
   sprite.texture = texture;
@@ -201,25 +204,33 @@ function connectRender() {
   renderWs = new WebSocket(`${protocol}//${window.location.host}/ws/tha`);
   renderWs.binaryType = 'arraybuffer';
 
-  renderWs.onopen = () => { connected = true; };
+  renderWs.onopen = () => { connected = true; _framePending = false; };
   renderWs.onmessage = (e) => {
     if (!(e.data instanceof ArrayBuffer)) return;
+    
+    // 🌟 帧跳跃：如果上一帧还在解码/上传中，直接丢弃中间帧，防止积压
+    if (_framePending) return;
+    
+    const now = performance.now();
+    // 🌟 限制渲染帧率上限 ~72 FPS，超出刷新率的帧无意义且加重 GC
+    if (now - _lastFrameTime < 14) return;
+    _lastFrameTime = now;
+    
+    _framePending = true;
     const blob = new Blob([e.data], { type: 'image/jpeg' });
     
-    // 🌟 核心改进：使用 createImageBitmap 替代 URL.createObjectURL，将图片解码工作搬到后台线程
     createImageBitmap(blob)
       .then((imageBitmap) => {
+        _framePending = false;
         if (!sprite || !app) {
           imageBitmap.close();
           return;
         }
 
         const oldTex = sprite.texture;
-        // PixiJS v7 能够无缝支持以 ImageBitmap 格式创建 Texture
         const tex = PIXI.Texture.from(imageBitmap);
         const updated = updateSprite(tex);
 
-        // 🌟 核心修复：清理老旧纹理，防止视频显存（VRAM）和系统 RAM 的泄漏
         if (updated && oldTex && oldTex !== PIXI.Texture.WHITE) {
           oldTex.destroy(true); 
         } else if (!updated) {
@@ -227,6 +238,7 @@ function connectRender() {
         }
       })
       .catch((err) => {
+        _framePending = false;
         console.error('[THA] ImageBitmap async decode failed:', err);
       });
   };
@@ -295,7 +307,7 @@ function hidePanel() {
 }
 function scheduleHide() {
   clearTimeout(hideTimeout);
-  hideTimeout = setTimeout(hidePanel, 3000);
+  hideTimeout = setTimeout(hidePanel, isLocked ? 200 : 1200);
 }
 document.body.addEventListener('mouseenter', () => showPanel());
 document.body.addEventListener('mousemove', () => { showPanel(); scheduleHide(); });
@@ -649,8 +661,8 @@ function startMouthTracking(source) {
     mouthTimer = requestAnimationFrame(trackLoop);
 
     const now = performance.now();
-    // 提升发包频率至 25ms (40Hz)，使口型变换更加高频顺滑
-    if (now - lastSendTime < 25) return;
+    // 🌟 发包频率匹配渲染帧率 ~30Hz，避免无效高频消息堆积
+    if (now - lastSendTime < 33) return;
 
     audioAnalyser.getByteFrequencyData(dataArray);
 

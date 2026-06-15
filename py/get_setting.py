@@ -86,6 +86,7 @@ DEFAULT_ASR_DIR = os.path.join(USER_DATA_DIR, 'asr')
 DEFAULT_TTS_DIR = os.path.join(USER_DATA_DIR, 'tts')
 DEFAULT_EBD_DIR = os.path.join(USER_DATA_DIR, 'ebd')
 DEFAULT_THA_DIR = os.path.join(base_path, 'tha_models')
+THA_USER_MODELS_DIR = os.path.join(UPLOAD_FILES_DIR, 'tha_models')
 # --- 跨平台全局Skills路径 ---
 def get_global_skills_dir():
     """
@@ -121,7 +122,8 @@ COVS_PATH = os.path.join(USER_DATA_DIR, "conversations.db")
 dirs_to_create =[
     USER_DATA_DIR, LOG_DIR, MEMORY_CACHE_DIR, UPLOAD_FILES_DIR, 
     TOOL_TEMP_DIR, AGENT_DIR, KB_DIR, EXT_DIR, 
-    DEFAULT_ASR_DIR, DEFAULT_TTS_DIR, DEFAULT_EBD_DIR, CONFIG_BASE_PATH, SKILLS_DIR,DEFAULT_THA_DIR
+    DEFAULT_ASR_DIR, DEFAULT_TTS_DIR, DEFAULT_EBD_DIR, CONFIG_BASE_PATH, SKILLS_DIR,DEFAULT_THA_DIR,
+    THA_USER_MODELS_DIR
 ]
 for d in set(dirs_to_create):
     try:
@@ -458,6 +460,34 @@ def _wrap_pcm_to_wav(pcm_data):
 
 # ----------------- 7. 配置读写 -----------------
 
+def _migrate_old_tha_models():
+    """将旧版THA模型从 uploaded_files/根目录 迁移到 uploaded_files/tha_models/ 子目录"""
+    if not os.path.isdir(UPLOAD_FILES_DIR):
+        return
+    target_dir = THA_USER_MODELS_DIR
+    os.makedirs(target_dir, exist_ok=True)
+    
+    for entry in os.listdir(UPLOAD_FILES_DIR):
+        entry_path = os.path.join(UPLOAD_FILES_DIR, entry)
+        # 跳过 tha_models 子目录自身
+        if entry_path == target_dir:
+            continue
+        # 只处理子目录
+        if not os.path.isdir(entry_path):
+            continue
+        # 检查是否包含 THA 模型文件
+        onnx_file = os.path.join(entry_path, "model.onnx")
+        char_file = os.path.join(entry_path, "character.png")
+        if os.path.exists(onnx_file) and os.path.exists(char_file):
+            dest = os.path.join(target_dir, entry)
+            if not os.path.exists(dest):
+                try:
+                    import shutil
+                    shutil.move(entry_path, dest)
+                    logging.info(f"[Migration] 已迁移THA模型目录: {entry} -> tha_models/{entry}")
+                except Exception as e:
+                    logging.warning(f"[Migration] 迁移THA模型失败 {entry}: {e}")
+
 async def load_settings():
     await init_db()
     defaults = get_default_settings_sync().copy()
@@ -482,6 +512,74 @@ async def load_settings():
                             merge_defaults(value, target_dict[key])
                 
                 merge_defaults(defaults, user_settings)
+                
+                # 清理 VRMConfig.userModels 中文件已不存在的残留条目
+                vrm_config = user_settings.get("VRMConfig", {})
+                vrm_user_models = vrm_config.get("userModels", [])
+                if vrm_user_models:
+                    cleaned_vrm = []
+                    for model in vrm_user_models:
+                        model_path = model.get("path", "")
+                        if model_path:
+                            try:
+                                from urllib.parse import urlparse
+                                parsed = urlparse(model_path)
+                                local_path = os.path.join(UPLOAD_FILES_DIR, os.path.basename(parsed.path))
+                            except Exception:
+                                local_path = os.path.join(UPLOAD_FILES_DIR, os.path.basename(model_path))
+                            if os.path.exists(local_path):
+                                cleaned_vrm.append(model)
+                            else:
+                                has_changes[0] = True
+                                logging.info(f"[Cleanup] 移除无效VRM模型条目: {model.get('name', model.get('id', ''))} (文件不存在: {local_path})")
+                        else:
+                            cleaned_vrm.append(model)
+                    if len(cleaned_vrm) != len(vrm_user_models):
+                        vrm_config["userModels"] = cleaned_vrm
+                        # 如果当前选中的模型也被清理了，重置为第一个默认模型
+                        selected_id = vrm_config.get("selectedModelId", "")
+                        default_models = vrm_config.get("defaultModels", [])
+                        if selected_id and not any(m.get("id") == selected_id for m in cleaned_vrm) and not any(m.get("id") == selected_id for m in default_models):
+                            if default_models:
+                                vrm_config["selectedModelId"] = default_models[0].get("id", "alice")
+                            elif cleaned_vrm:
+                                vrm_config["selectedModelId"] = cleaned_vrm[0].get("id", "alice")
+                            else:
+                                vrm_config["selectedModelId"] = "alice"
+                
+                # 清理 THAConfig.userModels 中目录已不存在的残留条目
+                tha_config = user_settings.get("THAConfig", {})
+                tha_user_models = tha_config.get("userModels", [])
+                if tha_user_models:
+                    cleaned_tha = []
+                    for model in tha_user_models:
+                        model_id = model.get("id", "")
+                        if model_id:
+                            tha_model_dir = os.path.join(THA_USER_MODELS_DIR, model_id)
+                            onnx_file = os.path.join(tha_model_dir, "model.onnx")
+                            if os.path.isdir(tha_model_dir) and os.path.exists(onnx_file):
+                                cleaned_tha.append(model)
+                            else:
+                                has_changes[0] = True
+                                logging.info(f"[Cleanup] 移除无效THA模型条目: {model.get('name', model_id)} (目录不存在或缺少model.onnx)")
+                        else:
+                            cleaned_tha.append(model)
+                    if len(cleaned_tha) != len(tha_user_models):
+                        tha_config["userModels"] = cleaned_tha
+                        selected_id = tha_config.get("selectedModelId", "")
+                        default_models = tha_config.get("defaultModels", [])
+                        all_tha = default_models + cleaned_tha
+                        if selected_id and not any(m.get("id") == selected_id for m in all_tha):
+                            if default_models:
+                                tha_config["selectedModelId"] = default_models[0].get("id", "")
+                            elif cleaned_tha:
+                                tha_config["selectedModelId"] = cleaned_tha[0].get("id", "")
+                            else:
+                                tha_config["selectedModelId"] = ""
+                
+                # 迁移旧版THA模型: 从 uploaded_files/根目录 迁移到 uploaded_files/tha_models/
+                _migrate_old_tha_models()
+                
                 if has_changes[0]:
                     asyncio.create_task(save_settings(user_settings))
                 return user_settings
