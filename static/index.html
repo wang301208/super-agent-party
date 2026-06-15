@@ -546,23 +546,22 @@ function updateElement(el, rawMarkdown, formatFn) {
         width="80%">
         <div class="knowledge-dialog-content">
           <!-- 服务器列表 -->
-          <div
-            v-for="provider in modelProviders"
-            :key="provider.id"
-            class="knowledge-item"
-            :class="{ active: settings.selectedProvider === provider.id }"
-            @click="
-              settings.selectedProvider = provider.id;
-              selectMainProvider(provider.id);
-              showModelDialog = false;
-            "
-          >
-            <img
-              :src="getVendorLogo(provider.vendor)"
-              class="mini-vendor-logo"
-            />
-            <span>{{ provider.modelId }}</span>
-          </div>
+          <template v-for="group in groupedModelProviders" :key="group.vendor">
+            <div class="vendor-section-header">{{ formatVendorName(group.vendor) }}</div>
+            <div
+              v-for="provider in group.providers"
+              :key="provider.id"
+              class="knowledge-item"
+              :class="{ active: settings.selectedProvider === provider.id }"
+              @click="
+                settings.selectedProvider = provider.id;
+                selectMainProvider(provider.id);
+                showModelDialog = false;
+              "
+            >
+              <span>{{ provider.modelId }}</span>
+            </div>
+          </template>
           <div v-if="Object.keys(modelProviders).length === 0" class="empty-tip">
               {{ t('firstTimeUse') }}
               <el-link
@@ -3411,20 +3410,18 @@ function updateElement(el, rawMarkdown, formatFn) {
                           @visible-change="handleFastProviderVisibleChange"
                           class="full-width-input"
                         >
-                          <el-option
-                            v-for="provider in modelProviders"
-                            :key="provider.id"
-                            :label="provider.vendor+' - '+provider.modelId"
-                            :value="provider.id"
+                          <el-option-group
+                            v-for="group in groupedModelProviders"
+                            :key="group.vendor"
+                            :label="formatVendorName(group.vendor)"
                           >
-                            <div class="provider-option">
-                              <img 
-                                :src="getVendorLogo(provider.vendor)" 
-                                class="mini-vendor-logo"
-                              />
-                              <span class="model-id">{{ provider.modelId }}</span>
-                            </div>
-                          </el-option>
+                            <el-option
+                              v-for="provider in group.providers"
+                              :key="provider.id"
+                              :label="provider.modelId"
+                              :value="provider.id"
+                            />
+                          </el-option-group>
                         </el-select>
                       </el-form-item>
 
@@ -3677,10 +3674,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                                   :value="null"
                                 >
                                   <div class="provider-option">
-                                    <img 
-                                      src="source/providers/logo.png" 
-                                      class="mini-vendor-logo"
-                                    />
                                     <span class="model-id">{{ t("NoLongTermMemory") }}</span>
                                   </div>
                                 </el-option>
@@ -3690,24 +3683,21 @@ function updateElement(el, rawMarkdown, formatFn) {
                                   value='paraphrase-multilingual-MiniLM-L12-v2'
                                 >
                                   <div class="provider-option">
-                                    <img 
-                                      :src="getVendorLogo('Local')" 
-                                      class="mini-vendor-logo"
-                                    />
                                     <span class="model-id">paraphrase-multilingual-MiniLM-L12-v2</span>
                                   </div>
                                 </el-option>
-                                <el-option
-                                  v-for="p in modelProviders"
-                                  :key="p.id"
-                                  :label="p.vendor + ' - ' + p.modelId"
-                                  :value="p.id"
+                                <el-option-group
+                                  v-for="group in groupedModelProviders"
+                                  :key="group.vendor"
+                                  :label="formatVendorName(group.vendor)"
                                 >
-                                  <div class="provider-option">
-                                    <img :src="getVendorLogo(p.vendor)" class="mini-vendor-logo" />
-                                    <span class="model-id">{{ p.modelId }}</span>
-                                  </div>
-                                </el-option>
+                                  <el-option
+                                    v-for="provider in group.providers"
+                                    :key="provider.id"
+                                    :label="provider.modelId"
+                                    :value="provider.id"
+                                  />
+                                </el-option-group>
                               </el-select>
                             </el-form-item>
                             <el-form-item :label="t('enableInfer')" class="form-item-align" label-position="left">
@@ -3942,20 +3932,18 @@ function updateElement(el, rawMarkdown, formatFn) {
                         @visible-change="handleFastProviderVisibleChange"
                         class="full-width-input"
                       >
-                        <el-option
-                          v-for="provider in modelProviders"
-                          :key="provider.id"
-                          :label="provider.vendor+' - '+provider.modelId"
-                          :value="provider.id"
+                        <el-option-group
+                          v-for="group in groupedModelProviders"
+                          :key="group.vendor"
+                          :label="formatVendorName(group.vendor)"
                         >
-                          <div class="provider-option">
-                            <img 
-                              :src="getVendorLogo(provider.vendor)" 
-                              class="mini-vendor-logo"
-                            />
-                            <span class="model-id">{{ provider.modelId }}</span>
-                          </div>
-                        </el-option>
+                          <el-option
+                            v-for="provider in group.providers"
+                            :key="provider.id"
+                            :label="provider.modelId"
+                            :value="provider.id"
+                          />
+                        </el-option-group>
                       </el-select>
                     </el-form-item>
 
@@ -4725,20 +4713,18 @@ function updateElement(el, rawMarkdown, formatFn) {
                             @visible-change="handleTTSProviderVisibleChange"
                             class="full-width-input"
                           >
-                            <el-option
-                              v-for="provider in modelProviders"
-                              :key="provider.id"
-                              :label="provider.vendor+' - '+provider.modelId"
-                              :value="provider.id"
+                            <el-option-group
+                              v-for="group in groupedModelProviders"
+                              :key="group.vendor"
+                              :label="formatVendorName(group.vendor)"
                             >
-                              <div class="provider-option">
-                                <img 
-                                  :src="getVendorLogo(provider.vendor)" 
-                                  class="mini-vendor-logo"
-                                />
-                                <span class="model-id">{{ provider.modelId }}</span>
-                              </div>
-                            </el-option>
+                              <el-option
+                                v-for="provider in group.providers"
+                                :key="provider.id"
+                                :label="provider.modelId"
+                                :value="provider.id"
+                              />
+                            </el-option-group>
                           </el-select>
                         </el-form-item>
                         <el-form-item :label="t('openaiStream')" class="form-item-align" label-position="left">
@@ -6064,10 +6050,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   <!-- 已有供应商磁贴 -->
                   <div class="provider-card" v-for="(provider, index) in modelProviders" :key="provider.id">
                     <div class="card-header">
-                      <img 
-                        :src="getVendorLogo(provider.vendor)" 
-                        class="mini-vendor-logo"
-                      />
+                      <span class="vendor-label">{{ formatVendorName(provider.vendor) }}</span>
                       <div class="card-actions">
                         <el-tooltip :content="t('copyProvider')" placement="top">
                           <el-button
@@ -6208,91 +6191,130 @@ function updateElement(el, rawMarkdown, formatFn) {
                   v-model="showAddDialog"
                   id="show-Add-Dialog"
                   :title="t('addNewProvider')"
-                  width="80%"
-                  @closed="newProviderTemp = { vendor: '', url: '' }; searchQuery = ''; activeCategory = 'all'"
+                  width="900px"
+                  @closed="newProviderTemp = { vendor: '', url: '', apiKey: '', modelId: '', models: [], modelsLoading: false, connectionStatus: null }; searchQuery = ''; activeCategory = 'all'"
                 >
-                  <el-form>
-                    <!-- 供应商选择区域 -->
-                    <el-form-item :label="t('provider')" required label-position="top">
-                      
-                      <!-- 新增：搜索和分类过滤器区域 -->
-                      <div class="vendor-filter-tools">
-                        <el-input
-                          v-model="searchQuery"
-                          :placeholder="t('searchProvider')" 
-                          prefix-icon="Search"
-                          clearable
-                          class="search-input"
-                        ></el-input>
-                        <el-radio-group v-model="activeCategory" class="category-tabs">
-                          <el-radio-button label="all">{{ t('allModel') }}</el-radio-button>
-                          <el-radio-button label="cloud">{{ t('cloudModel') }}</el-radio-button>
-                          <el-radio-button label="local">{{ t('localModel') }}</el-radio-button>
-                        </el-radio-group>
-                      </div>
+                  <!-- 搜索和分类过滤 —— 双栏上方全宽 -->
+                  <div class="vendor-filter-tools">
+                    <el-input
+                      v-model="searchQuery"
+                      :placeholder="t('searchProvider')" 
+                      prefix-icon="Search"
+                      clearable
+                      class="search-input"
+                    ></el-input>
+                    <el-radio-group v-model="activeCategory" class="category-tabs" size="small">
+                      <el-radio-button label="all">{{ t('allModel') }}</el-radio-button>
+                      <el-radio-button label="cloud">{{ t('cloudModel') }}</el-radio-button>
+                      <el-radio-button label="local">{{ t('localModel') }}</el-radio-button>
+                    </el-radio-group>
+                  </div>
 
-                      <!-- 供应商卡片列表 (注意此处改为遍历 filteredVendorOptions) -->
-                      <div class="vendor-grid">
+                  <div class="add-provider-body">
+                    <!-- 左侧：供应商选择 -->
+                    <div class="add-provider-left">
+                      <div class="vendor-select-list">
                         <div 
                           v-for="item in filteredVendorOptions" 
                           :key="item.value"
-                          class="vendor-card"
+                          class="vendor-select-row"
                           :class="{ 'selected': newProviderTemp.vendor === item.value }"
                           @click="handleSelectVendor(item.value)"
-                          id="vendor-Option"
                         >
-                          <img 
-                            :src="getVendorLogo(item.value)" 
-                            :alt="item.label"
-                            class="vendor-logo"
-                          />
-                          <div class="vendor-name">{{ t(item.label) }}</div>
+                          <div class="vendor-select-row-content">
+                            <span class="vendor-select-name">{{ formatVendorName(t(item.label)) }}</span>
+                            <span class="vendor-select-category">
+                              {{ item.value === 'custom' || item.value === 'customAnthropic' ? t('custom') : localVendors.includes(item.value) ? t('localModel') : t('cloudModel') }}
+                            </span>
+                          </div>
+                          <div class="vendor-select-indicator">
+                            <i v-if="newProviderTemp.vendor === item.value" class="fa-solid fa-check"></i>
+                          </div>
                         </div>
-                        
-                        <!-- 当没有搜索结果时显示提示 -->
                         <el-empty 
                           v-if="filteredVendorOptions.length === 0" 
                           :description="t('noResultsFound')" 
-                          style="width: 100%; grid-column: 1 / -1;" 
-                        />
+                          style="padding: 32px 0;" >
+                        </el-empty>
                       </div>
-                    </el-form-item>
-
-                    <!-- 原有的自建 URL 和 提示信息保持不变 -->
-                    <el-form-item
-                      v-if="newProviderTemp.vendor === 'custom' || newProviderTemp.vendor === 'customAnthropic'"
-                      :label="t('customURL')"
-                      required
-                    >
-                      <el-input
-                        v-model="newProviderTemp.url"
-                        :placeholder=" newProviderTemp.vendor === 'custom' ? 'https://api.example.com/v1' : 'https://api.example.com'"
-                      />
-                    </el-form-item>
-
-                    <div v-if="newProviderTemp.vendor && newProviderTemp.vendor !== 'custom' && newProviderTemp.vendor !== 'customAnthropic'">
-                      <el-alert
-                        :title="t('defaultConfigInfo')"
-                        type="info"
-                        :closable="false"
-                        class="mb-2"
-                      >
-                        1. {{ t('autoFilledDefaultAPI') }} {{ newProviderTemp.vendor }} URL<br>2. 
-                          <el-link
-                            type="primary"
-                            :underline="false"
-                            :href="vendorAPIpage[newProviderTemp.vendor]" 
-                            target="_blank"
-                          >
-                            <el-icon class="mr-1">
-                              <i class="fa-solid fa-key"></i>
-                            </el-icon>{{ t('gotoAPI') }}
-                          </el-link><br>
-                        3. {{ t('enterApiKeyThenClick') }}<br>
-                        4. {{ t('localConfigNotice') }}
-                      </el-alert>
                     </div>
-                  </el-form>
+
+                    <!-- 右侧：配置面板 -->
+                    <div class="add-provider-right">
+                      <template v-if="newProviderTemp.vendor">
+                        <!-- URL -->
+                        <div class="config-section">
+                          <div class="config-section-header">
+                            <span class="config-label">API Endpoint</span>
+                            <el-link
+                              v-if="vendorAPIpage[newProviderTemp.vendor]"
+                              :href="vendorAPIpage[newProviderTemp.vendor]"
+                              target="_blank"
+                              :underline="false"
+                              class="config-link-icon"
+                            >
+                              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            </el-link>
+                          </div>
+                          <el-input
+                            v-model="newProviderTemp.url"
+                            :placeholder="newProviderTemp.vendor === 'custom' || newProviderTemp.vendor === 'customAnthropic' ? 'https://api.example.com/v1' : ''" >
+                          </el-input>
+                        </div>
+
+                        <!-- API Key + 测试连接 -->
+                        <div class="config-section">
+                          <div class="config-section-header">
+                            <span class="config-label">API Key</span>
+                          </div>
+                          <el-input
+                            v-model="newProviderTemp.apiKey"
+                            type="password"
+                            show-password
+                            placeholder="sk-..."
+                            style="margin-bottom: 10px;" >
+                          </el-input>
+                          <el-button
+                            type="primary"
+                            :loading="newProviderTemp.connectionStatus === 'testing'"
+                            :disabled="!newProviderTemp.url"
+                            @click="testAndFetchModels"
+                            style="width: 100%;"
+                          >
+                            {{ newProviderTemp.connectionStatus === 'testing' ? t('testing') : t('testConnection') }}
+                          </el-button>
+
+                          <!-- 连接状态 -->
+                          <div v-if="newProviderTemp.connectionStatus === 'success'" class="connection-status success">
+                            <i class="fa-solid fa-circle-check"></i>
+                            {{ t('connectionSuccess').replace('{count}', newProviderTemp.models.length) }}
+                          </div>
+                          <div v-if="newProviderTemp.connectionStatus === 'failed'" class="connection-status error">
+                            <i class="fa-solid fa-circle-xmark"></i>
+                            {{ t('connectionFailed') }}
+                          </div>
+                        </div>
+
+                        <!-- 模型列表 -->
+                        <div class="config-section" v-if="newProviderTemp.models.length > 0">
+                          <div class="config-section-header">
+                            <span class="config-label">{{ t('availableModels') }} ({{ newProviderTemp.models.length }})</span>
+                          </div>
+                          <div class="model-list">
+                            <div v-for="model in newProviderTemp.models" :key="model" class="model-item">
+                              <span class="model-name">{{ model }}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </template>
+
+                      <!-- 空状态 -->
+                      <div v-else class="add-provider-right-empty">
+                        <el-icon :size="40" color="#c0c4cc"><i class="fa-solid fa-arrow-left"></i></el-icon>
+                        <p>{{ t('selectVendorHint') }}</p>
+                      </div>
+                    </div>
+                  </div>
 
                   <template #footer>
                     <el-button @click="showAddDialog = false">{{ t('cancel') }}</el-button>
@@ -6365,20 +6387,18 @@ function updateElement(el, rawMarkdown, formatFn) {
                           @visible-change="handleMainProviderVisibleChange"
                           class="full-width-input"
                         >
-                          <el-option
-                            v-for="provider in modelProviders"
-                            :key="provider.id"
-                            :label="provider.vendor+' - '+provider.modelId"
-                            :value="provider.id"
+                          <el-option-group
+                            v-for="group in groupedModelProviders"
+                            :key="group.vendor"
+                            :label="formatVendorName(group.vendor)"
                           >
-                            <div class="provider-option">
-                              <img 
-                                :src="getVendorLogo(provider.vendor)" 
-                                class="mini-vendor-logo"
-                              />
-                              <span class="model-id">{{ provider.modelId }}</span>
-                            </div>
-                          </el-option>
+                            <el-option
+                              v-for="provider in group.providers"
+                              :key="provider.id"
+                              :label="provider.modelId"
+                              :value="provider.id"
+                            />
+                          </el-option-group>
                         </el-select>
                       </el-form-item>
                     </div>
@@ -6636,20 +6656,18 @@ function updateElement(el, rawMarkdown, formatFn) {
                           @visible-change="handleFastProviderVisibleChange"
                           class="full-width-input"
                         >
-                          <el-option
-                            v-for="provider in modelProviders"
-                            :key="provider.id"
-                            :label="provider.vendor+' - '+provider.modelId"
-                            :value="provider.id"
+                          <el-option-group
+                            v-for="group in groupedModelProviders"
+                            :key="group.vendor"
+                            :label="formatVendorName(group.vendor)"
                           >
-                            <div class="provider-option">
-                              <img 
-                                :src="getVendorLogo(provider.vendor)" 
-                                class="mini-vendor-logo"
-                              />
-                              <span class="model-id">{{ provider.modelId }}</span>
-                            </div>
-                          </el-option>
+                            <el-option
+                              v-for="provider in group.providers"
+                              :key="provider.id"
+                              :label="provider.modelId"
+                              :value="provider.id"
+                            />
+                          </el-option-group>
                         </el-select>
                       </el-form-item>
                       <el-form-item :label="t('triggerMode')" class="form-item-align">
@@ -6947,20 +6965,18 @@ function updateElement(el, rawMarkdown, formatFn) {
                           @visible-change="handleReasonerProviderVisibleChange"
                           class="full-width-input"
                         >
-                          <el-option
-                            v-for="provider in modelProviders"
-                            :key="provider.id"
-                            :label="provider.vendor+' - '+provider.modelId"
-                            :value="provider.id"
+                          <el-option-group
+                            v-for="group in groupedModelProviders"
+                            :key="group.vendor"
+                            :label="formatVendorName(group.vendor)"
                           >
-                            <div class="provider-option">
-                              <img 
-                                :src="getVendorLogo(provider.vendor)" 
-                                class="mini-vendor-logo"
-                              />
-                              <span class="model-id">{{ provider.modelId }}</span>
-                            </div>
-                          </el-option>
+                            <el-option
+                              v-for="provider in group.providers"
+                              :key="provider.id"
+                              :label="provider.modelId"
+                              :value="provider.id"
+                            />
+                          </el-option-group>
                         </el-select>
                       </el-form-item>
                     </div>
@@ -7083,20 +7099,18 @@ function updateElement(el, rawMarkdown, formatFn) {
                           @visible-change="handleVisionProviderVisibleChange"
                           class="full-width-input"
                         >
-                          <el-option
-                            v-for="provider in modelProviders"
-                            :key="provider.id"
-                            :label="provider.vendor+' - '+provider.modelId"
-                            :value="provider.id"
+                          <el-option-group
+                            v-for="group in groupedModelProviders"
+                            :key="group.vendor"
+                            :label="formatVendorName(group.vendor)"
                           >
-                            <div class="provider-option">
-                              <img 
-                                :src="getVendorLogo(provider.vendor)" 
-                                class="mini-vendor-logo"
-                              />
-                              <span class="model-id">{{ provider.modelId }}</span>
-                            </div>
-                          </el-option>
+                            <el-option
+                              v-for="provider in group.providers"
+                              :key="provider.id"
+                              :label="provider.modelId"
+                              :value="provider.id"
+                            />
+                          </el-option-group>
                         </el-select>
                       </el-form-item>
                     </div>
@@ -7275,20 +7289,18 @@ function updateElement(el, rawMarkdown, formatFn) {
                           @visible-change="handleText2imgProviderVisibleChange"
                           class="full-width-input"
                         >
-                          <el-option
-                            v-for="provider in modelProviders"
-                            :key="provider.id"
-                            :label="provider.vendor+' - '+provider.modelId"
-                            :value="provider.id"
+                          <el-option-group
+                            v-for="group in groupedModelProviders"
+                            :key="group.vendor"
+                            :label="formatVendorName(group.vendor)"
                           >
-                            <div class="provider-option">
-                              <img 
-                                :src="getVendorLogo(provider.vendor)" 
-                                class="mini-vendor-logo"
-                              />
-                              <span class="model-id">{{ provider.modelId }}</span>
-                            </div>
-                          </el-option>
+                            <el-option
+                              v-for="provider in group.providers"
+                              :key="provider.id"
+                              :label="provider.modelId"
+                              :value="provider.id"
+                            />
+                          </el-option-group>
                         </el-select>
                       </el-form-item>
                       <el-form-item :label="t('sizeAllowCreate')" class="form-item-align">
@@ -7331,20 +7343,18 @@ function updateElement(el, rawMarkdown, formatFn) {
                           @visible-change="handleText2imgProviderVisibleChange"
                           class="full-width-input"
                         >
-                          <el-option
-                            v-for="provider in modelProviders"
-                            :key="provider.id"
-                            :label="provider.vendor+' - '+provider.modelId"
-                            :value="provider.id"
+                          <el-option-group
+                            v-for="group in groupedModelProviders"
+                            :key="group.vendor"
+                            :label="formatVendorName(group.vendor)"
                           >
-                            <div class="provider-option">
-                              <img 
-                                :src="getVendorLogo(provider.vendor)" 
-                                class="mini-vendor-logo"
-                              />
-                              <span class="model-id">{{ provider.modelId }}</span>
-                            </div>
-                          </el-option>
+                            <el-option
+                              v-for="provider in group.providers"
+                              :key="provider.id"
+                              :label="provider.modelId"
+                              :value="provider.id"
+                            />
+                          </el-option-group>
                         </el-select>
                       </el-form-item>
                     </div>
@@ -7590,20 +7600,18 @@ function updateElement(el, rawMarkdown, formatFn) {
                           @visible-change="handleAsrProviderVisibleChange"
                           class="full-width-input"
                         >
-                          <el-option
-                            v-for="provider in modelProviders"
-                            :key="provider.id"
-                            :label="provider.vendor+' - '+provider.modelId"
-                            :value="provider.id"
+                          <el-option-group
+                            v-for="group in groupedModelProviders"
+                            :key="group.vendor"
+                            :label="formatVendorName(group.vendor)"
                           >
-                            <div class="provider-option">
-                              <img 
-                                :src="getVendorLogo(provider.vendor)" 
-                                class="mini-vendor-logo"
-                              />
-                              <span class="model-id">{{ provider.modelId }}</span>
-                            </div>
-                          </el-option>
+                            <el-option
+                              v-for="provider in group.providers"
+                              :key="provider.id"
+                              :label="provider.modelId"
+                              :value="provider.id"
+                            />
+                          </el-option-group>
                         </el-select>
                       </el-form-item>
                     </div>
@@ -8044,20 +8052,18 @@ function updateElement(el, rawMarkdown, formatFn) {
                           @visible-change="handleTTSProviderVisibleChange"
                           class="full-width-input"
                         >
-                          <el-option
-                            v-for="provider in modelProviders"
-                            :key="provider.id"
-                            :label="provider.vendor+' - '+provider.modelId"
-                            :value="provider.id"
+                          <el-option-group
+                            v-for="group in groupedModelProviders"
+                            :key="group.vendor"
+                            :label="formatVendorName(group.vendor)"
                           >
-                            <div class="provider-option">
-                              <img 
-                                :src="getVendorLogo(provider.vendor)" 
-                                class="mini-vendor-logo"
-                              />
-                              <span class="model-id">{{ provider.modelId }}</span>
-                            </div>
-                          </el-option>
+                            <el-option
+                              v-for="provider in group.providers"
+                              :key="provider.id"
+                              :label="provider.modelId"
+                              :value="provider.id"
+                            />
+                          </el-option-group>
                         </el-select>
                       </el-form-item>
                       <el-form-item :label="t('openaiStream')" class="form-item-align" label-position="left">
@@ -9859,20 +9865,18 @@ function updateElement(el, rawMarkdown, formatFn) {
                             @visible-change="handleFastProviderVisibleChange"
                             class="full-width-input"
                           >
-                            <el-option
-                              v-for="provider in modelProviders"
-                              :key="provider.id"
-                              :label="provider.vendor+' - '+provider.modelId"
-                              :value="provider.id"
+                            <el-option-group
+                              v-for="group in groupedModelProviders"
+                              :key="group.vendor"
+                              :label="formatVendorName(group.vendor)"
                             >
-                              <div class="provider-option">
-                                <img 
-                                  :src="getVendorLogo(provider.vendor)" 
-                                  class="mini-vendor-logo"
-                                />
-                                <span class="model-id">{{ provider.modelId }}</span>
-                              </div>
-                            </el-option>
+                              <el-option
+                                v-for="provider in group.providers"
+                                :key="provider.id"
+                                :label="provider.modelId"
+                                :value="provider.id"
+                              />
+                            </el-option-group>
                           </el-select>
                         </el-form-item>
 
@@ -9943,20 +9947,18 @@ function updateElement(el, rawMarkdown, formatFn) {
                             @visible-change="handleFastProviderVisibleChange"
                             class="full-width-input"
                           >
-                            <el-option
-                              v-for="provider in modelProviders"
-                              :key="provider.id"
-                              :label="provider.vendor+' - '+provider.modelId"
-                              :value="provider.id"
+                            <el-option-group
+                              v-for="group in groupedModelProviders"
+                              :key="group.vendor"
+                              :label="formatVendorName(group.vendor)"
                             >
-                              <div class="provider-option">
-                                <img 
-                                  :src="getVendorLogo(provider.vendor)" 
-                                  class="mini-vendor-logo"
-                                />
-                                <span class="model-id">{{ provider.modelId }}</span>
-                              </div>
-                            </el-option>
+                              <el-option
+                                v-for="provider in group.providers"
+                                :key="provider.id"
+                                :label="provider.modelId"
+                                :value="provider.id"
+                              />
+                            </el-option-group>
                           </el-select>
                         </el-form-item>
 
@@ -10965,29 +10967,27 @@ function updateElement(el, rawMarkdown, formatFn) {
                               @visible-change="handleRankProviderVisibleChange"
                               class="full-width-input"
                             >
-                              <el-option
-                                v-for="provider in modelProviders"
-                                :key="provider.id"
-                                :label="provider.vendor+' - '+provider.modelId"
-                                :value="provider.id"
+                              <el-option-group
+                                v-for="group in groupedModelProviders"
+                                :key="group.vendor"
+                                :label="formatVendorName(group.vendor)"
                               >
-                                <div class="provider-option">
-                                  <img 
-                                    :src="getVendorLogo(provider.vendor)" 
-                                    class="mini-vendor-logo"
-                                  />
-                                  <span class="model-id">{{ provider.modelId }}</span>
-                                </div>
-                              </el-option>
+                                <el-option
+                                  v-for="provider in group.providers"
+                                  :key="provider.id"
+                                  :label="provider.modelId"
+                                  :value="provider.id"
+                                />
+                              </el-option-group>
                             </el-select>
                           </el-form-item>
                           <el-alert
                             type="info"
                             :closable="false"
-                            class="mb-2"
+                            class="mb-2"  v-if="KBSettings.is_rerank"
                           >
                             <template #default>
-                              <div class="alert-content" v-show="KBSettings.is_rerank">
+                              <div class="alert-content">
                                 {{ t('firstTimeUse') }}
                                 <el-link
                                   type="primary"
@@ -11194,27 +11194,21 @@ function updateElement(el, rawMarkdown, formatFn) {
                               value='paraphrase-multilingual-MiniLM-L12-v2'
                             >
                               <div class="provider-option">
-                                <img 
-                                  :src="getVendorLogo('Local')" 
-                                  class="mini-vendor-logo"
-                                />
                                 <span class="model-id">paraphrase-multilingual-MiniLM-L12-v2</span>
                               </div>
                             </el-option>
-                            <el-option
-                              v-for="provider in modelProviders"
-                              :key="provider.id"
-                              :label="provider.vendor+' - '+provider.modelId"
-                              :value="provider.id"
+                            <el-option-group
+                              v-for="group in groupedModelProviders"
+                              :key="group.vendor"
+                              :label="formatVendorName(group.vendor)"
                             >
-                              <div class="provider-option">
-                                <img 
-                                  :src="getVendorLogo(provider.vendor)" 
-                                  class="mini-vendor-logo"
-                                />
-                                <span class="model-id">{{ provider.modelId }}</span>
-                              </div>
-                            </el-option>
+                              <el-option
+                                v-for="provider in group.providers"
+                                :key="provider.id"
+                                :label="provider.modelId"
+                                :value="provider.id"
+                              />
+                            </el-option-group>
                           </el-select>
                         </el-form-item>
                         <el-alert type="info" :closable="false" class="mb-2">
@@ -14805,20 +14799,18 @@ function updateElement(el, rawMarkdown, formatFn) {
                             @visible-change="handleFastProviderVisibleChange"
                             class="full-width-input"
                           >
-                            <el-option
-                              v-for="provider in modelProviders"
-                              :key="provider.id"
-                              :label="provider.vendor+' - '+provider.modelId"
-                              :value="provider.id"
+                            <el-option-group
+                              v-for="group in groupedModelProviders"
+                              :key="group.vendor"
+                              :label="formatVendorName(group.vendor)"
                             >
-                              <div class="provider-option">
-                                <img 
-                                  :src="getVendorLogo(provider.vendor)" 
-                                  class="mini-vendor-logo"
-                                />
-                                <span class="model-id">{{ provider.modelId }}</span>
-                              </div>
-                            </el-option>
+                              <el-option
+                                v-for="provider in group.providers"
+                                :key="provider.id"
+                                :label="provider.modelId"
+                                :value="provider.id"
+                              />
+                            </el-option-group>
                           </el-select>
                         </el-form-item>
 
@@ -17394,26 +17386,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                               @mouseleave="handleSelectorLeave">
                               
                               <div class="current-engine">
-                                  <!-- 动态显示当前引擎的高清 Logo 图片 -->
-                                  <img 
-                                      v-if="searchEngine === 'party'" 
-                                      src="./source/icon_shadow.png" 
-                                      class="engine-logo-img" 
-                                      alt="Party"
-                                  >
-                                  <img 
-                                      v-if="searchEngine === 'bing'" 
-                                      src="./source/providers/bing.png" 
-                                      class="engine-logo-img" 
-                                      alt="Bing"
-                                  >
-                                  <img 
-                                      v-if="searchEngine === 'google'" 
-                                      src="./source/providers/google.png" 
-                                      class="engine-logo-img" 
-                                      alt="Google"
-                                  >
-                                  <!-- 下拉小箭头保留 -->
+                                  <span class="engine-name">{{ searchEngine === 'party' ? 'Party' : searchEngine === 'bing' ? 'Bing' : searchEngine === 'google' ? 'Google' : 'Party' }}</span>
                                   <i class="fa-solid fa-caret-down"></i>
                               </div>
                               
@@ -17422,29 +17395,17 @@ function updateElement(el, rawMarkdown, formatFn) {
                                   <div class="engine-item" 
                                       @click="setSearchEngine('party')" 
                                       :class="{active: searchEngine === 'party'}">
-                                  <img 
-                                      src="./source/icon_shadow.png" 
-                                      class="engine-logo-img" 
-                                      alt="party"
-                                  > Party
+                                   Party
                                   </div>
                                   <div class="engine-item" 
                                       @click="setSearchEngine('bing')" 
                                       :class="{active: searchEngine === 'bing'}">
-                                  <img 
-                                      src="./source/providers/bing.png" 
-                                      class="engine-logo-img" 
-                                      alt="Bing"
-                                  > Bing
+                                   Bing
                                   </div>
                                   <div class="engine-item" 
                                       @click="setSearchEngine('google')" 
                                       :class="{active: searchEngine === 'google'}">
-                                  <img 
-                                      src="./source/providers/google.png" 
-                                      class="engine-logo-img" 
-                                      alt="Google"
-                                  > Google
+                                   Google
                                   </div>
                               </div>
                           </div>
