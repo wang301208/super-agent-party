@@ -451,24 +451,22 @@ function updateElement(el, rawMarkdown, formatFn) {
         :title="t('mainModel')"
         width="80%">
         <div class="knowledge-dialog-content">
-          <!-- 服务器列表 -->
-          <div
-            v-for="provider in modelProviders"
-            :key="provider.id"
-            class="knowledge-item"
-            :class="{ active: settings.selectedProvider === provider.id }"
-            @click="
-              settings.selectedProvider = provider.id;
-              selectMainProvider(provider.id);
-              showModelDialog = false;
-            "
-          >
-            <img
-              :src="getVendorLogo(provider.vendor)"
-              class="mini-vendor-logo"
-            />
-            <span>{{ provider.modelId }}</span>
-          </div>
+          <template v-for="group in groupedModelProviders" :key="group.vendor">
+            <div class="vendor-section-header">{{ formatVendorName(group.vendor) }}</div>
+            <div
+              v-for="provider in group.providers"
+              :key="provider.id"
+              class="knowledge-item"
+              :class="{ active: settings.selectedProvider === provider.id }"
+              @click="
+                settings.selectedProvider = provider.id;
+                selectMainProvider(provider.id);
+                showModelDialog = false;
+              "
+            >
+              <span>{{ provider.modelId }}</span>
+            </div>
+          </template>
           <div v-if="Object.keys(modelProviders).length === 0" class="empty-tip">
               {{ t('firstTimeUse') }}
               <el-link

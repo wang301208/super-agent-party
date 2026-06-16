@@ -4999,6 +4999,35 @@ formatMessage(content, index) {
         showNotification(this.t('fetch_models_failed'), 'error');
       }
     },
+    async testAndFetchModels() {
+      if (!this.newProviderTemp.url || !this.newProviderTemp.apiKey) {
+        showNotification(this.t('enterUrlAndKey'), 'warning');
+        return;
+      }
+      this.newProviderTemp.connectionStatus = 'testing';
+      this.newProviderTemp.modelsLoading = true;
+      this.newProviderTemp.models = [];
+      try {
+        const response = await fetch(`/v1/providers/models`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: this.newProviderTemp.url,
+            api_key: this.newProviderTemp.apiKey,
+            vendor: this.newProviderTemp.vendor
+          })
+        });
+        if (!response.ok) throw new Error('Connection failed');
+        const data = await response.json();
+        this.newProviderTemp.models = data.data || [];
+        this.newProviderTemp.connectionStatus = 'success';
+        this.newProviderTemp.modelsLoading = false;
+      } catch (error) {
+        this.newProviderTemp.connectionStatus = 'failed';
+        this.newProviderTemp.modelsLoading = false;
+        this.newProviderTemp.models = [];
+      }
+    },
     // 找到原有的 removeProvider 方法，替换为以下代码
     async removeProvider(index) {
       // 获取被删除的供应商信息
@@ -5040,13 +5069,13 @@ formatMessage(content, index) {
         vendor: this.newProviderTemp.vendor,
         url: this.newProviderTemp.url,
         apiKey: this.newProviderTemp.apiKey || '',
-        modelId: this.newProviderTemp.modelId || '',
-        models: []
+        modelId: this.newProviderTemp.models.length > 0 ? this.newProviderTemp.models[0] : (this.newProviderTemp.modelId || ''),
+        models: this.newProviderTemp.models || []
       }
       
       this.modelProviders.push(newProvider)
       this.showAddDialog = false
-      this.newProviderTemp = { vendor: '', url: '', apiKey: '', modelId: '' }
+      this.newProviderTemp = { vendor: '', url: '', apiKey: '', modelId: '', models: [], modelsLoading: false, connectionStatus: null }
       this.autoSaveSettings()
     },
     handleVendorChange(value) {
@@ -5125,6 +5154,9 @@ formatMessage(content, index) {
       if (value === 'llama.cpp') {
         this.newProviderTemp.apiKey = 'llamacpp' // 新增
       }
+      this.newProviderTemp.models = [];
+      this.newProviderTemp.modelsLoading = false;
+      this.newProviderTemp.connectionStatus = null;
     },
     // rerank供应商
     async selectRankProvider(providerId) {
@@ -6489,16 +6521,39 @@ formatMessage(content, index) {
       }
     },
     getVendorLogo(vendor) {
-      return this.vendorLogoList[vendor] || "source/providers/logo.png";
+      return null;
     },
     getMCPVendorLogo(vendor) {
-      return this.MCPvendorLogoList[vendor] || "source/providers/logo.png";
+      return null;
     },
     getPromptVendorLogo(vendor) {
-      return this.promptLogoList[vendor] || "source/providers/logo.png";
+      return null;
     },
     getCardVendorLogo(vendor) {
-      return this.cardLogoList[vendor] || "source/providers/logo.png";
+      return null;
+    },
+    formatVendorName(name) {
+      if (!name) return '';
+      const first = name.charAt(0);
+      if (first >= 'a' && first <= 'z') return first.toUpperCase() + name.slice(1);
+      return name;
+    },
+    getVendorInitials(vendor) {
+      if (!vendor) return '?';
+      const words = vendor.split(/[\s\-_\.]+/).filter(w => w.length > 0);
+      if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+      return vendor.substring(0, 2).toUpperCase();
+    },
+    getVendorAvatarColor(vendor) {
+      const palette = [
+        '#007AFF', '#FF9500', '#34C759', '#FF3B30',
+        '#AF52DE', '#5856D6', '#FF2D55', '#00C7BE',
+        '#8E8E93', '#FFD60A', '#32D74B', '#0A84FF'
+      ];
+      let hash = 0;
+      const str = vendor || '';
+      for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+      return palette[Math.abs(hash) % palette.length];
     },
     handleSelectVendor(vendor) {
       this.newProviderTemp.vendor = vendor;

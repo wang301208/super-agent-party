@@ -1300,6 +1300,20 @@ const app = Vue.createApp({
       }
     },
 
+    groupedModelProviders() {
+      const groups = {};
+      const providers = this.modelProviders || [];
+      providers.forEach(p => {
+        const vendor = p.vendor || 'Unknown';
+        if (!groups[vendor]) groups[vendor] = [];
+        groups[vendor].push(p);
+      });
+      return Object.entries(groups).map(([vendor, providers]) => ({
+        vendor,
+        providers
+      }));
+    },
+
     // ✨ 新增：主页面扩展列表过滤逻辑 ✨
     filteredManageExtensions() {
       if (!this.searchManageExtensionQuery) {

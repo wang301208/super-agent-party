@@ -2092,15 +2092,6 @@ body {
   margin-bottom: 1rem;
   position: relative;
 }
-.vendor-tag {
-  font-size: 0.875rem;
-  font-weight: 500;
-  padding: 0.25rem 0.75rem;
-  border-radius: 6px;
-  background-color: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  color: #64748b;
-}
 /* 卡片操作按钮组 */
 /* 调整卡片操作按钮组样式 */
 .card-actions {
@@ -2210,16 +2201,6 @@ body {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-}
-
-.vendor-tag {
-  background: var(--el-color-info);
-  color: var(--el-text-color-regular);
-  padding: 0 6px;        /* 去掉上下 padding */
-  border-radius: 3px;    /* 微调圆角更匹配小尺寸 */
-  font-size: 12px;
-  line-height: 16px;     /* 控制垂直居中 */
-  display: inline-block; /* 确保 line-height 生效 */
 }
 
 .model-id {
@@ -3192,61 +3173,294 @@ body {
   }
 }
 
-.vendor-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 16px;
-  padding: 16px;
-  width: 100%;
-}
-
-/* 添加响应式适配 */
-@media (max-width: 768px) {
-  .vendor-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (max-width: 480px) {
-  .vendor-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-
-.vendor-card {
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 16px;
-  cursor: pointer;
-  transition: all 0.3s;
-  text-align: center;
-}
-
-.vendor-card:hover {
-  border-color: var(--el-color-primary);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-}
-
-.vendor-card.selected {
-  border-color: var(--el-color-primary);
-  background-color: var(--el-color-primary-light-7);
-}
-
-.vendor-logo {
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
-  margin: 0 auto 8px;
-  border-radius: 50%;
-}
-
 .vendor-name {
   font-size: 14px;
   color: var(--el-text-color);
+  letter-spacing: -0.2px;
+}
+
+.vendor-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+.vendor-section-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  padding: 8px 16px 4px;
+  text-transform: none;
+  letter-spacing: 0.3px;
+  user-select: none;
+  opacity: 0.7;
+}
+
+/* Premium 供应商选择列表 */
+.vendor-select-list {
+  border-radius: 12px;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-light);
+  overflow: hidden;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.vendor-select-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.vendor-select-row:last-child {
+  border-bottom: none;
+}
+
+.vendor-select-row:hover {
+  background: var(--el-fill-color-light);
+}
+
+.vendor-select-row.selected {
+  background: var(--el-color-primary-light-9);
+}
+
+.vendor-select-row.selected .vendor-select-name {
+  color: var(--el-color-primary);
+}
+
+.vendor-select-row-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.vendor-select-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+  transition: color 0.15s ease;
+}
+
+.vendor-select-category {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color);
+  padding: 2px 10px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.vendor-select-indicator {
+  color: var(--el-color-primary);
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-left: 12px;
 }
 
 .mini-vendor-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* 搜索引擎纯文字名称 */
+.engine-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+/* =========================================
+   添加供应商对话框 —— 双栏布局
+   ========================================= */
+
+.add-provider-body {
+  display: flex;
+  gap: 24px;
+  min-height: 420px;
+  max-height: 60vh;
+}
+
+.add-provider-left {
+  width: 280px;
+  min-width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+
+.add-provider-left::-webkit-scrollbar {
+  width: 5px;
+}
+
+.add-provider-left::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.add-provider-left::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 10px;
+  transition: background 0.3s;
+}
+
+.add-provider-left:hover::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.3);
+}
+
+.add-provider-left::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.5);
+}
+
+.add-provider-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  padding-left: 4px;
+}
+
+.add-provider-right-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--el-text-color-placeholder);
+  font-size: 14px;
+}
+
+/* 配置区域 */
+.config-section {
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.config-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.config-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.config-link-icon {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  transition: color 0.15s;
+}
+
+.config-link-icon:hover {
+  color: var(--el-color-primary);
+}
+
+/* API Key 行 */
+.api-key-row {
+  display: flex;
+  gap: 10px;
+}
+
+.api-key-input {
+  flex: 1;
+}
+
+.test-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* 连接状态 */
+.connection-status {
+  margin-top: 8px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.connection-status.success {
+  color: #34C759;
+}
+
+.connection-status.error {
+  color: #FF3B30;
+}
+
+.connection-status i {
+  font-size: 14px;
+}
+
+/* 模型列表 */
+.model-list {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+}
+
+.model-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  transition: background 0.1s;
+}
+
+.model-item:last-child {
+  border-bottom: none;
+}
+
+.model-item:hover {
+  background: var(--el-fill-color-light);
+}
+
+.model-name {
+  font-size: 13px;
+  color: var(--el-text-color-primary);
+  font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+}
+
+/* 移动端适配 */
+@media (max-width: 680px) {
+  .add-provider-body {
+    flex-direction: column;
+    max-height: none;
+  }
+  
+  .add-provider-left {
+    width: 100%;
+    min-width: 0;
+    max-height: 240px;
+  }
+  
+  .add-provider-right {
+    padding-left: 0;
+  }
+}
+
   width: 24px;
   height: 24px;
   object-fit: contain;
@@ -3790,12 +4004,6 @@ body {
   color: var(--el-text-color-primary);
 }
 
-.model-vendor-logo{
-  width: 32px;
-  height: 32px;
-  object-fit: contain;
-  border-radius: 50%; /* 圆形 */
-}
 
 /* 头部 */
 .tool-header{
@@ -7228,33 +7436,15 @@ hr.footnotes-sep {
     color: #f5a623; /* 星星黄色 */
 }
 
-/* 引擎 Logo 图片样式 */
-.engine-logo-img {
-    width: 18px;    /* 稍微调小一点，显得更精致 */
-    height: 18px;
-    object-fit: contain;
-    border-radius: 4px; /* 微圆角，符合 iOS 图标美学 */
-    /* 增加一个非常微弱的投影，让 Logo 更有立体感 */
-    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));
-    transition: transform 0.2s ease;
-}
-
 /* 容器微调 */
 .current-engine {
     display: flex;
     align-items: center;
-    gap: 8px; /* 图片和箭头之间的间距 */
-    padding: 2px 6px;
+    gap: 6px;
+    padding: 2px 8px;
     border-radius: 6px;
     transition: background 0.2s;
 }
-
-/* 悬停时 Logo 稍微放大 */
-.engine-selector:hover .engine-logo-img {
-    transform: scale(1.1);
-}
-
-/* 箭头的颜色适配 */
 .current-engine .fa-caret-down {
     font-size: 10px;
     color: var(--el-text-color-placeholder);
@@ -8924,18 +9114,6 @@ hr.footnotes-sep {
   background-color: rgba(128, 128, 128, 0.2) !important;
 }
 
-/* 5. 适配特殊元素（Vendor Logo 图片） */
-.unified-input-wrapper .model-btn .model-vendor-logo {
-  width: 20px;
-  height: 20px;
-  opacity: 0.8;
-  transition: opacity 0.2s;
-}
-
-.unified-input-wrapper .model-btn:hover .model-vendor-logo {
-  opacity: 1;
-}
-
 /* 6. 禁用状态 */
 .unified-input-wrapper .el-button.is-disabled {
   opacity: 0.3 !important;
@@ -10583,24 +10761,23 @@ code {
 /* 为网格内的子元素绑定弹跳进场动画 */
 .provider-grid > div, 
 .guide-grid > div, 
-.plugins-grid > div,
-.vendor-grid > div {
+.plugins-grid > div {
   animation: cardPopIn 0.6s var(--ease-out-back) both;
 }
 
 /* 动态交错延迟 (利用 nth-child 实现纯 CSS 瀑布流) */
-.provider-grid > div:nth-child(1), .guide-grid > div:nth-child(1), .plugins-grid > div:nth-child(1), .vendor-grid > div:nth-child(1) { animation-delay: 0.05s; }
-.provider-grid > div:nth-child(2), .guide-grid > div:nth-child(2), .plugins-grid > div:nth-child(2), .vendor-grid > div:nth-child(2) { animation-delay: 0.10s; }
-.provider-grid > div:nth-child(3), .guide-grid > div:nth-child(3), .plugins-grid > div:nth-child(3), .vendor-grid > div:nth-child(3) { animation-delay: 0.15s; }
-.provider-grid > div:nth-child(4), .guide-grid > div:nth-child(4), .plugins-grid > div:nth-child(4), .vendor-grid > div:nth-child(4) { animation-delay: 0.20s; }
-.provider-grid > div:nth-child(5), .guide-grid > div:nth-child(5), .plugins-grid > div:nth-child(5), .vendor-grid > div:nth-child(5) { animation-delay: 0.25s; }
-.provider-grid > div:nth-child(6), .guide-grid > div:nth-child(6), .plugins-grid > div:nth-child(6), .vendor-grid > div:nth-child(6) { animation-delay: 0.30s; }
-.provider-grid > div:nth-child(7), .guide-grid > div:nth-child(7), .plugins-grid > div:nth-child(7), .vendor-grid > div:nth-child(7) { animation-delay: 0.35s; }
-.provider-grid > div:nth-child(8), .guide-grid > div:nth-child(8), .plugins-grid > div:nth-child(8), .vendor-grid > div:nth-child(8) { animation-delay: 0.40s; }
-.provider-grid > div:nth-child(9), .guide-grid > div:nth-child(9), .plugins-grid > div:nth-child(9), .vendor-grid > div:nth-child(9) { animation-delay: 0.45s; }
-.provider-grid > div:nth-child(10),.guide-grid > div:nth-child(10),.plugins-grid > div:nth-child(10),.vendor-grid > div:nth-child(10){ animation-delay: 0.50s; }
-.provider-grid > div:nth-child(11),.guide-grid > div:nth-child(11),.plugins-grid > div:nth-child(11),.vendor-grid > div:nth-child(11){ animation-delay: 0.55s; }
-.provider-grid > div:nth-child(12),.guide-grid > div:nth-child(12),.plugins-grid > div:nth-child(12),.vendor-grid > div:nth-child(12){ animation-delay: 0.60s; }
+.provider-grid > div:nth-child(1), .guide-grid > div:nth-child(1), .plugins-grid > div:nth-child(1)(1) { animation-delay: 0.05s; }
+.provider-grid > div:nth-child(2), .guide-grid > div:nth-child(2), .plugins-grid > div:nth-child(2)(2) { animation-delay: 0.10s; }
+.provider-grid > div:nth-child(3), .guide-grid > div:nth-child(3), .plugins-grid > div:nth-child(3)(3) { animation-delay: 0.15s; }
+.provider-grid > div:nth-child(4), .guide-grid > div:nth-child(4), .plugins-grid > div:nth-child(4)(4) { animation-delay: 0.20s; }
+.provider-grid > div:nth-child(5), .guide-grid > div:nth-child(5), .plugins-grid > div:nth-child(5)(5) { animation-delay: 0.25s; }
+.provider-grid > div:nth-child(6), .guide-grid > div:nth-child(6), .plugins-grid > div:nth-child(6)(6) { animation-delay: 0.30s; }
+.provider-grid > div:nth-child(7), .guide-grid > div:nth-child(7), .plugins-grid > div:nth-child(7)(7) { animation-delay: 0.35s; }
+.provider-grid > div:nth-child(8), .guide-grid > div:nth-child(8), .plugins-grid > div:nth-child(8)(8) { animation-delay: 0.40s; }
+.provider-grid > div:nth-child(9), .guide-grid > div:nth-child(9), .plugins-grid > div:nth-child(9)(9) { animation-delay: 0.45s; }
+.provider-grid > div:nth-child(10),.guide-grid > div:nth-child(10),.plugins-grid > div:nth-child(10)(10){ animation-delay: 0.50s; }
+.provider-grid > div:nth-child(11),.guide-grid > div:nth-child(11),.plugins-grid > div:nth-child(11)(11){ animation-delay: 0.55s; }
+.provider-grid > div:nth-child(12),.guide-grid > div:nth-child(12),.plugins-grid > div:nth-child(12)(12){ animation-delay: 0.60s; }
 /* 超过12个的元素统一延迟，防止等待过久 */
 .provider-grid > div:nth-child(n+13), .guide-grid > div:nth-child(n+13), .plugins-grid > div:nth-child(n+13) { animation-delay: 0.65s; }
 
@@ -11296,7 +11473,6 @@ code {
 .provider-grid > div, 
 .guide-grid > div, 
 .plugins-grid > div,
-.vendor-grid > div,
 .text-list > .file-item, 
 .image-grid > .image-item, 
 .video-grid > .video-item,
@@ -11810,17 +11986,16 @@ body.has-custom-bg .chat-history-sidebar[style*="display: none"],
    供应商过滤与搜索区域 (无外框、占满整行版)
    ========================================= */
 
-/* 1. 工具栏外层容器：彻底透明，占满一行，两端对齐 */
+/* 1. 工具栏外层容器：全宽水平行 */
 .vendor-filter-tools {
   display: flex;
-  justify-content: space-between; /* 搜索框在左，标签在右 */
+  flex-direction: row;
+  justify-content: space-between;
   align-items: center;
   gap: 16px;
-  margin-bottom: 20px;
-  width: 100%; /* 强制占满整行 */
+  margin-bottom: 16px;
+  width: 100%;
   box-sizing: border-box;
-  
-  /* 去除所有背景、边框和内边距，使其完全融入原背景 */
   background: transparent;
   border: none;
   padding: 0;
@@ -11887,7 +12062,7 @@ body.has-custom-bg .chat-history-sidebar[style*="display: none"],
 }
 
 /* 4. 无结果时的空状态插画对齐优化 */
-.vendor-grid .el-empty {
+.vendor-select-list .el-empty {
   padding: 40px 0;
   --el-empty-text-color: var(--el-text-color-secondary);
 }
