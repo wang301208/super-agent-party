@@ -15,7 +15,6 @@ from openai import AsyncOpenAI
 
 from py.get_setting import convert_to_opus_simple, get_port, load_settings
 from py.behavior_engine import BehaviorItem, global_behavior_engine, BehaviorSettings
-from py.random_topic import get_random_topics
 
 # 飞书机器人配置模型
 class FeishuBotConfig(BaseModel):

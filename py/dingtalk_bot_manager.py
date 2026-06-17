@@ -19,7 +19,6 @@ from dingtalk_stream import AckMessage, ChatbotMessage
 # 假设这些模块在你的环境中定义
 from py.behavior_engine import BehaviorItem, BehaviorSettings, global_behavior_engine
 from py.get_setting import get_port, load_settings
-from py.random_topic import get_random_topics
 
 # 配置模型
 class DingtalkBotConfig(BaseModel):

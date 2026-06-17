@@ -44,7 +44,6 @@ from py.cdp_tool import (
     take_snapshot, wait_for, click, fill, hover, press_key, evaluate_script,
     take_screenshot, fill_form, drag, handle_dialog,
 )
-from py.random_topic import random_topics_tools, get_random_topics, get_categories
 from py.computer_use_tool import (
     computer_use_tools, mouse_use_tools, keyboard_use_tools, desktopVision_use_tools,
     mouse_move, mouse_click, mouse_double_click, mouse_drag, mouse_scroll, mouse_hold,
@@ -1151,8 +1150,6 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict,is_sub
         "fill_form":fill_form,
         "drag": drag,
         "handle_dialog": handle_dialog,
-        "get_random_topics":get_random_topics,
-        "get_categories":get_categories,
         
         # Docker Sandbox 相关工具（原有）
         "docker_sandbox": docker_sandbox,
@@ -3485,8 +3482,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
         if settings["tools"]["wikipedia"]['enabled']:
             tools.append(wikipedia_summary_tool)
             tools.append(wikipedia_section_tool)
-        if settings["tools"]["randomTopic"]['enabled']:
-            tools.extend(random_topics_tools)
         if settings["tools"]["arxiv"]['enabled']:
             tools.append(arxiv_tool)
         if settings['text2imgSettings']['enabled']:
@@ -5654,8 +5649,6 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
             tools.extend(keyboard_use_tools)
         if not settings['visionControlSettings']['desktopVision']:
             tools.extend(desktopVision_use_tools)
-    if settings["tools"]["randomTopic"]['enabled']:
-        tools.extend(random_topics_tools)
     if settings['tools']['time']['enabled'] and settings['tools']['time']['triggerMode'] == 'afterThinking':
         tools.append(time_tool)
     if settings["tools"]["weather"]['enabled']:

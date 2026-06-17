@@ -70,10 +70,6 @@
       },
       "autoBehavior": {
         "enabled": false
-      },
-      "randomTopic": {
-        "enabled": false,
-        "baseURL":"https://topics-after-party.zeabur.app"
       }
     },
     "fast": {

@@ -1215,11 +1215,13 @@ const app = Vue.createApp({
         document.documentElement.setAttribute('data-theme', newVal);
         
         // 更新 mermaid 主题
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: 'loose',
-          theme : ['dark','midnight','neon'].includes(newVal) ? 'dark' : 'default'
-        });
+        if (window.mermaid) {
+          mermaid.initialize({
+            startOnLoad: false,
+            securityLevel: 'loose',
+            theme : ['dark','midnight','neon'].includes(newVal) ? 'dark' : 'default'
+          });
+        }
 
         // 完整的主题色映射
         const themeColors = {
