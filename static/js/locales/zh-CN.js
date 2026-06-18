@@ -1620,6 +1620,8 @@ key3`,
         // 导航卡片 (Cards)
         'startChatting': '开始对话',
         'summonCompanion': '召唤桌面伴侣',
+        'summon3DCompanion': '召唤3D桌面伴侣',
+        'summon2DCompanion': '召唤2D桌面伴侣',
         'createRole': '创建角色',
         'omniAgent': '创建智能体',
         

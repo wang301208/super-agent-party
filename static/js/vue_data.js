@@ -87,6 +87,7 @@ let vue_data = {
     isExpanded: true,
     isElectron: isElectron,
     isSteamBuild: isSteamBuild,
+    isStandaloneChatPage: window.location.pathname.includes('chat.html'),
     isCollapse: true,
     isBtnCollapse: true,
     activeMenu: 'dashboard',

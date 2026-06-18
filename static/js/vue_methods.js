@@ -10717,6 +10717,13 @@ processMarkdownStreamForTTS(message, deltaText, isFinal = false) {
       showNotification('删除失败，请稍后再试', 'error');
     }
   },
+    goToMainApp() {
+    if (this.isElectron) {
+      window.location.href = `${this.partyURL}/index.html`;
+    } else {
+      window.location.href = '/';
+    }
+  },
     async startVRM() {
     if (this.isElectron) {
       this.VRMConfig.name = 'default';

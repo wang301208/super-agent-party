@@ -1618,6 +1618,8 @@ Key3`,
         // 导航卡片 (Cards)
         'startChatting': 'Chat',
         'summonCompanion': 'Summon Companion',
+        'summon3DCompanion': 'Summon 3D Companion',
+        'summon2DCompanion': 'Summon 2D Companion',
         'createRole': 'Create Role',
         'omniAgent': 'Create Agent',
         'omniAgentEnabled': 'Agent Enabled',

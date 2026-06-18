@@ -780,11 +780,19 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
             </div>
 
-            <!-- 2. 召唤伴侣 -->
+            <!-- 2. 召唤3D桌面伴侣 -->
             <div class="guide-card" @click="startVRM">
-              <div class="card-icon pink"><i class="fa-solid fa-user-ninja"></i></div>
+              <div class="card-icon pink"><i class="fa-solid fa-cube"></i></div>
               <div class="card-info">
-                <h3>{{ t('summonCompanion') }}</h3>
+                <h3>{{ t('summon3DCompanion') }}</h3>
+              </div>
+            </div>
+
+            <!-- 3. 召唤2D桌面伴侣 -->
+            <div class="guide-card" @click="startTHA">
+              <div class="card-icon blue"><i class="fa-solid fa-heart"></i></div>
+              <div class="card-info">
+                <h3>{{ t('summon2DCompanion') }}</h3>
               </div>
             </div>
 
