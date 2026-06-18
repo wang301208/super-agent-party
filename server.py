@@ -8223,7 +8223,7 @@ async def tha_websocket_endpoint(websocket: WebSocket):
                 break
 
     if not model_path:
-        user_dir = UPLOAD_FILES_DIR
+        user_dir = THA_USER_MODELS_DIR
         for entry in os.listdir(user_dir):
             entry_path = os.path.join(user_dir, entry)
             if os.path.isdir(entry_path) and entry == selected_id:
