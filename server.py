@@ -8211,26 +8211,30 @@ async def tha_websocket_endpoint(websocket: WebSocket):
     tha_config = settings.get("THAConfig", {})
     selected_id = tha_config.get("selectedModelId", "Lyra")
 
-    # 1. 查找模型路径
+    # 1. 查找模型路径 (.mlpackage 优先)
     model_path = None
     default_dir = os.path.join(base_path, "tha_models")
     for entry in os.listdir(default_dir):
         entry_path = os.path.join(default_dir, entry)
         if os.path.isdir(entry_path) and entry == selected_id:
+            mlp = os.path.join(entry_path, "model.mlpackage")
             mp = os.path.join(entry_path, "model.onnx")
-            if os.path.exists(mp):
-                model_path = mp
-                break
+            if os.path.isdir(mlp):
+                model_path = mlp; break
+            elif os.path.exists(mp):
+                model_path = mp; break
 
     if not model_path:
         user_dir = THA_USER_MODELS_DIR
         for entry in os.listdir(user_dir):
             entry_path = os.path.join(user_dir, entry)
             if os.path.isdir(entry_path) and entry == selected_id:
+                mlp = os.path.join(entry_path, "model.mlpackage")
                 mp = os.path.join(entry_path, "model.onnx")
-                if os.path.exists(mp):
-                    model_path = mp
-                    break
+                if os.path.isdir(mlp):
+                    model_path = mlp; break
+                elif os.path.exists(mp):
+                    model_path = mp; break
 
     if not model_path:
         logging.error(f"[THA WS] Model not found: {selected_id}")

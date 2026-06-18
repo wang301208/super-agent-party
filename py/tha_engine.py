@@ -19,7 +19,15 @@ from typing import Optional, Dict, Tuple
 logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------
-# 1. 情感 -> 45维姿态参数映射表
+# 1. 颜色空间转换
+# ------------------------------------------------------------
+def _linear_to_srgb(x):
+    x = np.clip(x, 0, 1)
+    return np.where(x <= 0.0031308, x * 12.92, 1.055 * (x ** (1.0 / 2.4)) - 0.055)
+
+
+# ------------------------------------------------------------
+# 2. 情感 -> 45维姿态参数映射表
 # ------------------------------------------------------------
 EMOTION_POSE_MAP: Dict[str, np.ndarray] = {}
 
@@ -418,6 +426,81 @@ class THAEngine:
 
 
 # ------------------------------------------------------------
+# 4b. CoreMLTHAEngine — Apple Silicon CoreML 渲染
+# ------------------------------------------------------------
+class CoreMLTHAEngine:
+    """Apple Silicon CoreML .mlpackage 渲染引擎。纹理已内嵌，单 pose 输入。"""
+
+    def __init__(self, model_path: str):
+        self.model = None
+        self._loaded = False
+        self.model_path = model_path
+        self._out_key = None
+        self.green_bg = np.array([0.0, 255.0, 0.0], dtype=np.float32).reshape(3, 1, 1)
+
+    def load(self):
+        if self._loaded:
+            return
+        try:
+            from coremltools.models import MLModel
+        except ImportError:
+            raise RuntimeError("coremltools not installed. Run: pip install coremltools")
+
+        self.model = MLModel(self.model_path)
+        self._out_key = [k for k in self.model.get_spec().description.output if k.name != "pose"]
+        if self._out_key:
+            self._out_key = self._out_key[0].name
+        else:
+            self._out_key = None
+
+        print(f"\n🍎 [THA] ===============================================")
+        print(f"🍎 [THA] Apple Silicon CoreML 引擎初始化!")
+        print(f"🍎 [THA] 模型: {os.path.basename(self.model_path)}")
+        print(f"🍎 [THA] 格式: baked .mlpackage (单 pose 输入, Neural Engine)")
+        print(f"🍎 [THA] ===============================================\n")
+        self._loaded = True
+
+    def render(self, pose: np.ndarray) -> bytes:
+        if not self._loaded:
+            self.load()
+
+        p = pose.reshape(1, 45).astype(np.float32)
+        result = self.model.predict({"pose": p})
+
+        if self._out_key:
+            blended = result[self._out_key]
+        else:
+            blended = [v for k, v in result.items() if k != "pose"][0]
+
+        img_data = blended[0]
+        C = img_data.shape[0]
+        _clip = np.clip
+
+        if C == 4:
+            rgb = img_data[:3, :, :]
+            alpha = img_data[3, :, :]
+            rgb = (rgb + 1.0) * 0.5
+            alpha = (alpha + 1.0) * 0.5
+            safe_a = np.where(alpha > 1e-6, alpha, 1.0)
+            rgb = rgb / safe_a[np.newaxis, :, :]
+            rgb = _linear_to_srgb(_clip(rgb, 0, 1))
+            alpha_a = alpha[np.newaxis, :, :]
+            result = (rgb * 255.0) * alpha_a + self.green_bg * (1.0 - alpha_a)
+            result = _clip(result, 0, 255).astype(np.uint8)
+        elif C == 3:
+            result = img_data if img_data.dtype == np.uint8 else _clip((img_data + 1.0) * 127.5, 0, 255).astype(np.uint8)
+        else:
+            raise RuntimeError(f"Unsupported channel count: {C}")
+
+        rgb_out = np.ascontiguousarray(result.transpose(1, 2, 0))
+        return simplejpeg.encode_jpeg(rgb_out, quality=50, colorspace='RGB', colorsubsampling='422')
+
+    @property
+    def loaded(self) -> bool:
+        return self._loaded
+
+
+# ------------------------------------------------------------
 # 5. THAModelManager — 模型文件管理
 # ------------------------------------------------------------
 class THAModelManager:
@@ -554,9 +637,13 @@ class THAModelManager:
 _engine_cache: Dict[str, THAEngine] = {}
 
 
-def get_engine(model_path: str) -> THAEngine:
+def get_engine(model_path: str):
+    """工厂函数：自动检测格式 (.mlpackage → CoreML, .onnx → ONNX)"""
     if model_path not in _engine_cache:
-        _engine_cache[model_path] = THAEngine(model_path)
+        if model_path.endswith('.mlpackage') or os.path.isdir(model_path):
+            _engine_cache[model_path] = CoreMLTHAEngine(model_path)
+        else:
+            _engine_cache[model_path] = THAEngine(model_path)
     return _engine_cache[model_path]
 
 
