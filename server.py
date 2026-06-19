@@ -776,17 +776,33 @@ async def lifespan(app: FastAPI):
     scheduler_task = asyncio.create_task(scheduler.start_loop())
 
     # --- [日志系统初始化] ---
+
     timestamp = time.time()
     log_path = os.path.join(LOG_DIR, f"backend_{timestamp}.log")
     logger = logging.getLogger("app")
+
     if not logger.handlers:
         logger.setLevel(logging.INFO)
-        handler = logging.StreamHandler()
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        
+        # 1. 格式化器（控制台和文件共用一套格式）
+        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        
+        # 2. 控制台输出（保留，方便实时看）
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+        
+        # 3. 【新增】文件输出（这才是真正存盘的）
+        # 确保目录存在，否则会报错
+        os.makedirs(LOG_DIR, exist_ok=True)
+        file_handler = logging.FileHandler(log_path, encoding='utf-8')
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+
     logger.info("===== 日志系统初始化成功 =====")
     logger.info(f"用户数据目录: {USER_DATA_DIR}")
     logger.info(f"设置数据库路径: {DATABASE_PATH}")
+    logger.info(f"日志文件保存至: {log_path}")  # 额外加一行，方便确认路径
 
     # --- [代理与 HTTP 客户端初始化] ---
     proxy_url = None
