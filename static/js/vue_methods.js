@@ -4298,7 +4298,14 @@ formatMessage(content, index) {
           signal: abortController.signal
         });
 
-        if (!response.ok) throw new Error('Translation failed');
+        if (!response.ok) {
+          let errMsg = 'Translation failed';
+          try {
+            const errData = await response.json();
+            errMsg = errData?.error?.message || errMsg;
+          } catch (e) {}
+          throw new Error(errMsg);
+        }
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -13904,7 +13911,14 @@ isTargetPlatform(behavior, platformKey) {
         signal: controller.signal
       });
 
-      if (!res.ok) throw new Error('Network error');
+      if (!res.ok) {
+        let errMsg = 'Network error';
+        try {
+          const errData = await res.json();
+          errMsg = errData?.error?.message || errMsg;
+        } catch (_) {}
+        throw new Error(errMsg);
+      }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();

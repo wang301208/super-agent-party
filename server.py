@@ -7016,9 +7016,10 @@ async def simple_chat_endpoint(request: ChatRequest):
     if current_settings.get("systemSettings", {}).get("contentSafety", False):
         all_text = ""
         for msg in request.messages:
-            all_text += " " + (msg.content or "")
+            all_text += " " + _extract_text_content(msg.get("content", ""))
         is_safe, matched = await check_content_safety(all_text)
         if not is_safe:
+            print(f"[content_safety] blocked words: {matched}")
             return JSONResponse(
                 status_code=403,
                 content={"error": {"message": "您的输入包含敏感内容，已被安全策略拦截。",

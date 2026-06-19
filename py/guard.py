@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import asyncio
 
 SAFETY_WORDS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "safety_words.json")
@@ -26,20 +27,44 @@ def load_safety_words():
     _flat_other = {k: set(v) for k, v in _all_words.items() if k not in ("zh", "en")}
 
 
+def _contains_cjk(word: str) -> bool:
+    """Check if word contains any CJK character."""
+    return any('\u4e00' <= c <= '\u9fff' or '\u3400' <= c <= '\u4dbf' for c in word)
+
+def _is_url_like(word: str) -> bool:
+    """Check if word looks like a URL/domain fragment (contains ., /, :, ?, etc.)."""
+    return any(c in word for c in '.:/?=&%#@\\')
+
+def _match_word(word: str, text: str) -> bool:
+    """Match a safety word against text.
+    CJK words: use substring matching.
+    URL-like words (containing ., /, :, etc.): use substring matching.
+    Other ASCII words: use word boundary (\b) matching to avoid false positives.
+    """
+    if _contains_cjk(word):
+        return word in text
+    if _is_url_like(word):
+        return word in text
+    # ASCII word: use \b boundary to match only whole words
+    try:
+        return bool(re.search(r'\b' + re.escape(word) + r'\b', text))
+    except re.error:
+        return word in text
+
 def check_content_safety_sync(text: str) -> tuple:
     if not text or not _all_words:
         return True, []
     matched = []
     lower = text.lower()
     for word in _flat_zh:
-        if word in lower:
+        if _match_word(word.lower(), lower):
             matched.append(word)
     for word in _flat_en:
-        if word in lower:
+        if _match_word(word.lower(), lower):
             matched.append(word)
     for lang_words in _flat_other.values():
         for word in lang_words:
-            if word in lower:
+            if _match_word(word.lower(), lower):
                 matched.append(word)
     return len(matched) == 0, matched
 
