@@ -2322,7 +2322,7 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
         motion_names = list(THA_MOTIONS.keys())
         motion_tags = [f"<{m}>" for m in motion_names]
         THA_Expression_messages = (
-            "\n\n你可以通过以下标签控制 THA 桌面宠物：\n\n"
+            "\n\n你可以通过以下标签控制你的虚拟形象表情和动作：\n\n"
             "【表情标签】<happy> <angry> <sad> <neutral> <surprised> <relaxed>\n"
             f"【动作标签】{', '.join(motion_tags)}\n\n"
             "使用方法：将标签放在句子开头（如果有音色标签，就放到音色标签之后即可），例如：\n"

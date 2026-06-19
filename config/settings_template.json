@@ -24,7 +24,9 @@
       "isChinaProxy": false,
       "githubProxy": "",
       "bgHistoryList": [],
-      "contentSafety": false
+      "contentSafety": false,
+      "disclaimerAccepted": false,
+      "showDisclaimer": true
     },
     "mainAgent":"super-model",
     "mcpServers": {},

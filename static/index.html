@@ -4199,7 +4199,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             href="https://github.com/OpenMOSS/MOSS-TTS" 
                             target="_blank"
                           >
-                            <el-icon class="mr-1"><i class="fa-brands fa-github"></i></el-icon>GitHub
+                            <el-icon class="mr-1"><i class="fa-solid fa-code"></i></el-icon>GitHub
                           </el-link>
                         </span>
                       </div>
@@ -4328,7 +4328,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <div class="tool-item" v-show="newTTSConfig.engine === 'azure'">
                       <div class="tool-header">
                         <div class="header-left">
-                          <span><i class="fa-brands fa-microsoft"></i> 
+                          <span><i class="fa-solid fa-cloud"></i> 
                             Azure TTS
                             <el-link
                               type="primary"
@@ -4443,7 +4443,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <div class="tool-item" v-show="newTTSConfig.engine === 'google'">
                       <div class="tool-header">
                         <div class="header-left">
-                          <span><i class="fa-brands fa-google"></i> 
+                          <span><i class="fa-solid fa-globe"></i> 
                             Google TTS
                             <el-link
                               type="primary"
@@ -7929,7 +7929,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             href="https://github.com/OpenMOSS/MOSS-TTS" 
                             target="_blank"
                           >
-                            <el-icon class="mr-1"><i class="fa-brands fa-github"></i></el-icon>GitHub
+                            <el-icon class="mr-1"><i class="fa-solid fa-code"></i></el-icon>GitHub
                           </el-link>
                         </span>
                       </div>
@@ -8260,7 +8260,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   <div class="tool-item" v-show="ttsSettings.engine === 'azure'">
                     <div class="tool-header">
                       <div class="header-left">
-                        <span><i class="fa-brands fa-microsoft"></i> 
+                        <span><i class="fa-solid fa-cloud"></i> 
                           Azure TTS
                           <el-link
                             type="primary"
@@ -8377,7 +8377,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   <div class="tool-item" v-show="ttsSettings.engine === 'google'">
                     <div class="tool-header">
                       <div class="header-left">
-                        <span><i class="fa-brands fa-google"></i> 
+                        <span><i class="fa-solid fa-globe"></i> 
                           Google TTS
                           <el-link
                             type="primary"
@@ -9922,7 +9922,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                       <div class="tool-header">
                         <div class="header-left">
                           <span>
-                            <el-icon><i class="fa-brands fa-docker"></i></el-icon>
+                            <el-icon><i class="fa-solid fa-box"></i></el-icon>
                             {{t('dockerSandbox')}}
                           </span>
                           <el-link
@@ -9932,7 +9932,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             target="_blank"
                           >
                             <el-icon class="mr-1">
-                              <i class="fa-brands fa-docker"></i>
+                              <i class="fa-solid fa-box"></i>
                             </el-icon>{{ t('downloadDocker') }}
                           </el-link>
                         </div>
@@ -12345,6 +12345,18 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <span class="tool-desc">{{ t('contentSafetyNotice') }}</span>
                   </div>
 
+                  <!-- 首次启动免责声明 -->
+                  <div class="tool-item">
+                    <div class="tool-header">
+                      <span>
+                        <el-icon><i class="fa-solid fa-triangle-exclamation"></i></el-icon>
+                        {{ t('safetyDisclaimerToggle') }}
+                      </span>
+                      <el-switch v-model="systemSettings.showDisclaimer" @change="autoSaveSettings" :disabled="isSteamBuild"></el-switch>
+                    </div>
+                    <span class="tool-desc">{{ t('safetyDisclaimerToggleNotice') }}</span>
+                  </div>
+
                   <!-- 数据存储路径设置 -->
                   <div class="tool-item" v-if="!isDocker">
                     <div class="tool-header">
@@ -13089,7 +13101,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             <!-- QQ机器人配置头部 -->
                             <div class="tool-header" style="display: flex; justify-content: space-between; align-items: center;">
                               <span>
-                                <el-icon><i class="fa-brands fa-qq"></i></el-icon>
+                                <el-icon><i class="fa-solid fa-comments"></i></el-icon>
                                 {{ t('qq_bot_config') }}
                                 <el-link
                                   type="primary"
@@ -13313,7 +13325,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             <!-- 微信机器人配置头部 -->
                             <div class="tool-header" style="display: flex; justify-content: space-between; align-items: center;">
                               <span>
-                                <el-icon><i class="fa-brands fa-weixin"></i></el-icon>
+                                <el-icon><i class="fa-solid fa-comment-dots"></i></el-icon>
                                 {{ t('wechat_personal_bot_config') }}
                                 <span style="font-size: 12px; color: #909399; margin-left: 10px;">
                                   {{ t('wechat_no_config_hint') }}
@@ -14305,7 +14317,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             <!-- 头部 -->
                             <div class="tool-header" style="display: flex; justify-content: space-between; align-items: center;">
                               <span>
-                                <el-icon><i class="fa-brands fa-discord"></i></el-icon>
+                                <el-icon><i class="fa-solid fa-headset"></i></el-icon>
                                 {{ t('discord_bot_config') }}
                                 <el-link type="primary" :underline="false" href="https://discord.com/developers/applications" target="_blank">
                                   <el-icon class="mr-1"><i class="fa-solid fa-key"></i></el-icon>
@@ -14502,7 +14514,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             <!-- 头部 -->
                             <div class="tool-header" style="display: flex; justify-content: space-between; align-items: center;">
                               <span>
-                                <el-icon><i class="fa-brands fa-slack"></i></el-icon>
+                                <el-icon><i class="fa-solid fa-message"></i></el-icon>
                                 {{ t('slack_bot_config') || 'Slack 机器人配置' }}
                                 <el-link type="primary" :underline="false" href="https://api.slack.com/apps" target="_blank">
                                   <el-icon class="mr-1"><i class="fa-solid fa-key"></i></el-icon>
@@ -15415,7 +15427,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                               target="_blank"
                             >
                               <el-icon class="mr-1">
-                                <i class="fa-brands fa-github"></i>
+                                <i class="fa-solid fa-code"></i>
                               </el-icon>{{ t('tha_distill_desc') }}
                             </el-link>
                           </p>
@@ -16135,7 +16147,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             <!-- 直播配置头部 -->
                             <div class="tool-header" style="display: flex; justify-content: space-between; align-items: center;">
                               <span>
-                                <el-icon><i class="fa-brands fa-bilibili"></i></el-icon>
+                                <el-icon><i class="fa-solid fa-tv"></i></el-icon>
                                 {{ t('live_stream_bot') }}
                               </span>
                               <div>
@@ -16256,7 +16268,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             <!-- 直播配置头部 -->
                             <div class="tool-header" style="display: flex; justify-content: space-between; align-items: center;">
                               <span>
-                                <el-icon><i class="fa-brands fa-youtube"></i></el-icon>
+                                <el-icon><i class="fa-solid fa-video"></i></el-icon>
                                 {{ t('live_stream_bot') }}
                               </span>
                               <div>
@@ -16371,7 +16383,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             <!-- 直播配置头部 -->
                             <div class="tool-header" style="display: flex; justify-content: space-between; align-items: center;">
                               <span>
-                                <el-icon><i class="fa-brands fa-twitch"></i></el-icon>
+                                <el-icon><i class="fa-solid fa-video"></i></el-icon>
                                 {{ t('live_stream_bot') }}
                               </span>
                               <div>
@@ -16908,7 +16920,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                         </div>
                         <div class="plugin-action">
                           <el-button v-if="plugin.repository" type="primary" @click="openRepository(plugin.repository)" class="repo-button">
-                            <i class="fa-brands fa-github"></i>{{ t('viewRepository') }}
+                            <i class="fa-solid fa-code"></i>{{ t('viewRepository') }}
                           </el-button>
                           
                           <el-button v-if="plugin.installed" type="warning" :loading="plugin._updating" @click="updatePlugin(plugin)">
@@ -17186,7 +17198,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   <div class="tool-item">
                     <div class="tool-header">
                       <span>
-                        <el-icon><i class='fa-brands fa-docker'></i></el-icon>
+                        <el-icon><i class='fa-solid fa-box'></i></el-icon>
                         {{ t('docker') }}
                       </span>
                     </div>
@@ -17977,6 +17989,32 @@ function updateElement(el, rawMarkdown, formatFn) {
         </div>
       </el-main>
     </el-container>
+
+    <!-- 首次启动免责声明（Steam 版强制，GitHub 版可选） -->
+    <el-dialog append-to-body
+      v-model="showDisclaimerDialog"
+      :title="t('safetyDisclaimerTitle')"
+      width="65%"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :show-close="!isSteamBuild"
+      center
+    >
+      <div style="max-height: 55vh; overflow-y: auto; padding-right: 8px; line-height: 1.8;">
+        <p style="color: var(--el-color-warning); font-weight: bold;">{{ t('safetyDisclaimerWarning') }}</p>
+        <p>{{ t('safetyDisclaimerContent1') }}</p>
+        <p>{{ t('safetyDisclaimerContent2') }}</p>
+        <p>{{ t('safetyDisclaimerContent3') }}</p>
+        <p>{{ t('safetyDisclaimerContent4') }}</p>
+        <p>{{ t('safetyDisclaimerContent5') }}</p>
+      </div>
+      <template #footer>
+        <el-checkbox v-model="disclaimerAccepted" v-if="!isSteamBuild">{{ t('dontShowAgain') }}</el-checkbox>
+        <el-button type="primary" @click="acceptDisclaimer" :disabled="false" style="margin-left: 12px;">
+          {{ t('safetyDisclaimerAccept') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
   <!-- 引入Vue和Element Plus -->
   <script src="libs/vue.global.prod.js"></script>

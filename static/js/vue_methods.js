@@ -2137,8 +2137,11 @@ formatMessage(content, index) {
           this.modelProviders = data.data.modelProviders || this.modelProviders;
           this.systemSettings = data.data.systemSettings || this.systemSettings;
           if (isSteamBuild && !this.systemSettings.contentSafety) this.systemSettings.contentSafety = true;
-          if (this.systemSettings && (this.systemSettings.fontScale === undefined || this.systemSettings.fontScale === null)) {
-            this.systemSettings.fontScale = 1;
+          if (this.systemSettings && (this.systemSettings.autoCollapseInput === undefined || this.systemSettings.autoCollapseInput === null)) {
+            this.systemSettings.autoCollapseInput = false;
+          }
+          if (isSteamBuild || (this.systemSettings.showDisclaimer !== false && !this.systemSettings.disclaimerAccepted)) {
+            this.showDisclaimerDialog = true;
           }
           if (this.systemSettings && (this.systemSettings.codeFontScale === undefined || this.systemSettings.codeFontScale === null)) {
             this.systemSettings.codeFontScale = 1;
@@ -2725,7 +2728,6 @@ formatMessage(content, index) {
             this.sendTTSStatusToVRM('ttsStarted', {});
         }
 
-        this.startTimer();
         this.voiceStack = ['default'];
         let tts_buffer = '';
         let isCodeBlock = false;
@@ -10081,26 +10083,163 @@ processMarkdownStreamForTTS(message, deltaText, isFinal = false) {
                 });
 
                 if (response.ok) {
-                    const audioBlob = await response.blob();
-                    const audioUrl = URL.createObjectURL(audioBlob);
-                    
-                    // --- 修改点：预先转换二进制并存储，但不发送 ---
-                    const audioBuffer = await audioBlob.arrayBuffer();
-
-                    message.audioChunks[index] = { 
-                        url: audioUrl, 
-                        buffer: audioBuffer, // 暂存二进制数据
-                        mimeType: audioBlob.type,
-                        expressions: chunk_expressions, 
-                        text: chunk_text, 
-                        index 
-                    };
+                    await this._streamTTSResponse(response, message, index, chunk_expressions, chunk_text, vrmIndex, isVrmSilent);
                     this.checkAudioPlayback();
                 }
             }
         } catch (error) {
             console.error(`TTS Chunk ${index} error:`, error);
         }
+    },
+
+    async _streamTTSResponse(response, message, index, chunk_expressions, chunk_text, vrmIndex, isVrmSilent) {
+        const mimeType = response.headers.get('content-type') || 'audio/mpeg';
+
+        if (typeof MediaSource === 'undefined' || !MediaSource.isTypeSupported(mimeType)) {
+            const audioBlob = await response.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const audioBuffer = await audioBlob.arrayBuffer();
+            message.audioChunks[index] = { url: audioUrl, buffer: audioBuffer, mimeType, expressions: chunk_expressions, text: chunk_text, index };
+            return { url: audioUrl, buffer: audioBuffer, mimeType };
+        }
+
+        const ms = new MediaSource();
+        const audioUrl = URL.createObjectURL(ms);
+        const allChunks = [];
+        const pendingChunks = [];
+        let sourceBuffer = null;
+        let streamDone = false;
+
+        const flushQueue = () => {
+            if (!sourceBuffer || sourceBuffer.updating) return;
+            while (pendingChunks.length > 0) {
+                try { sourceBuffer.appendBuffer(pendingChunks.shift()); } catch (e) { break; }
+            }
+            if (streamDone && pendingChunks.length === 0) {
+                try { ms.endOfStream(); } catch (e) {}
+            }
+        };
+
+        const reader = response.body.getReader();
+        const ctx = this;
+
+        // 创建唯一的播放 Audio 元素 —— 这会触发 MediaSource 的 sourceopen
+        const audio = new Audio(audioUrl);
+        audio.preload = 'auto';
+        const audioReady = new Promise((resolve) => {
+            const onReady = () => {
+                try {
+                    sourceBuffer = ms.addSourceBuffer(mimeType);
+                    sourceBuffer.addEventListener('updateend', flushQueue);
+                    resolve();
+                } catch (e) {
+                    sourceBuffer = null;
+                    resolve();
+                }
+            };
+            if (ms.readyState === 'open') { onReady(); }
+            else { ms.addEventListener('sourceopen', onReady, { once: true }); }
+        });
+
+        // 等待 SourceBuffer 就绪
+        try {
+            await Promise.race([
+                audioReady,
+                new Promise((_, reject) => setTimeout(() => reject(new Error('sb_timeout')), 5000))
+            ]);
+        } catch (e) {
+            console.warn('MediaSource setup failed, falling back to blob:', e);
+            try { await reader.cancel(); } catch (e2) {}
+            const audioBlob = await response.blob();
+            const audioUrl2 = URL.createObjectURL(audioBlob);
+            const audioBuffer = await audioBlob.arrayBuffer();
+            message.audioChunks[index] = { url: audioUrl2, buffer: audioBuffer, mimeType, expressions: chunk_expressions, text: chunk_text, index };
+            return { url: audioUrl2, buffer: audioBuffer, mimeType };
+        }
+
+        // 同步读取首个音频块并填入 SourceBuffer，确保 play() 时有数据可播
+        try {
+            const first = await Promise.race([
+                reader.read(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('read_timeout')), 8000))
+            ]);
+            if (first && !first.done && first.value && first.value.length > 0) {
+                allChunks.push(first.value);
+                if (sourceBuffer && !sourceBuffer.updating) {
+                    sourceBuffer.appendBuffer(first.value);
+                    await new Promise((resolve) => {
+                        sourceBuffer.addEventListener('updateend', () => resolve(), { once: true });
+                        setTimeout(() => resolve(), 5000);
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('First chunk read failed:', e);
+        }
+
+        // 存入条目（含预创建的 Audio 元素）
+        message.audioChunks[index] = {
+            url: audioUrl,
+            buffer: null,
+            mimeType,
+            expressions: chunk_expressions,
+            text: chunk_text,
+            index,
+            _streaming: true,
+            _audio: audio
+        };
+
+        // 后台读取剩余数据
+        (async () => {
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) { streamDone = true; break; }
+                    allChunks.push(value);
+                    if (sourceBuffer) {
+                        if (sourceBuffer.updating) {
+                            pendingChunks.push(value);
+                        } else {
+                            try { sourceBuffer.appendBuffer(value); } catch (e) { sourceBuffer = null; }
+                        }
+                    } else {
+                        pendingChunks.push(value);
+                    }
+                }
+                while (sourceBuffer && (sourceBuffer.updating || pendingChunks.length > 0)) {
+                    if (!sourceBuffer.updating && pendingChunks.length > 0) {
+                        try { sourceBuffer.appendBuffer(pendingChunks.shift()); } catch (e) { break; }
+                    }
+                    await new Promise(r => setTimeout(r, 10));
+                }
+                try { ms.endOfStream(); } catch (e) {}
+            } catch (e) {}
+
+            const totalLength = allChunks.reduce((sum, c) => sum + c.length, 0);
+            const completeBuffer = new Uint8Array(totalLength);
+            let offset = 0;
+            for (const chunk of allChunks) {
+                completeBuffer.set(chunk, offset);
+                offset += chunk.length;
+            }
+
+            const audioChunk = message.audioChunks[index];
+            if (audioChunk) {
+                audioChunk.buffer = completeBuffer.buffer;
+                audioChunk._streaming = false;
+                if (!isVrmSilent && vrmIndex >= 0 && (ctx.vrmOnline || ctx.vtsOnline) && ctx.ttsWebSocket) {
+                    ctx.sendBinaryToVRM({
+                        type: 'audio_chunk',
+                        chunkIndex: vrmIndex,
+                        text: chunk_text,
+                        expressions: chunk_expressions,
+                        mimeType
+                    }, completeBuffer.buffer);
+                }
+            }
+        })();
+
+        return { url: audioUrl, buffer: null, mimeType, _streaming: true };
     },
 
     // 音频播放进程
@@ -10197,7 +10336,7 @@ processMarkdownStreamForTTS(message, deltaText, isFinal = false) {
 
             try {
 
-                if (!audioChunk.buffer && audioChunk.url) {
+                if (!audioChunk.buffer && audioChunk.url && !audioChunk._streaming) {
                     try {
                         const res = await fetch(audioChunk.url);
                         audioChunk.buffer = await res.arrayBuffer();
@@ -10224,7 +10363,7 @@ processMarkdownStreamForTTS(message, deltaText, isFinal = false) {
                     this.sendBinaryToVRM(metadata, audioChunk.buffer);
                 }
 
-                this.currentAudio = new Audio(audioChunk.url);
+                this.currentAudio = audioChunk._audio || new Audio(audioChunk.url);
                 
                 if (isVrmSilent) {
                     this.currentAudio.volume = 1.0; // 弹幕声音从浏览器出
@@ -19572,6 +19711,16 @@ gotoAddExtension(){
       
       // 使用 showNotification 提示删除成功
       showNotification(this.t('bgRemovedSuccess'), 'success');
+    },
+
+    acceptDisclaimer() {
+      this.showDisclaimerDialog = false;
+      if (isSteamBuild) { return; }
+      if (this.disclaimerAccepted) {
+        this.systemSettings.disclaimerAccepted = true;
+        this.systemSettings.showDisclaimer = false;
+        this.autoSaveSettings();
+      }
     },
   
 }
