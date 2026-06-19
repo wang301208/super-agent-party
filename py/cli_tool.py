@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import asyncio
-import base64
 import os
 import re
 import shutil
@@ -190,137 +189,7 @@ def get_detailed_exit_info(code: int, command: str) -> str:
             
     return info
 
-# ==================== [新增] Hashline 锚点编辑核心引擎 ====================
 
-def get_line_hash(line: str) -> str:
-    """生成行内容的 2 位哈希值 (Hashline 标准)"""
-    clean_line = line.rstrip('\r\n')
-    h = hashlib.md5(clean_line.encode('utf-8')).digest()
-    b = base64.b64encode(h, altchars=b'AB').decode('utf-8')
-    # 过滤非字母数字字符，取前两位
-    clean_b = ''.join(c for c in b if c.isalnum())
-    return clean_b[:2].upper() if len(clean_b) >= 2 else 'XX'
-
-def format_line_with_hash(line_number: int, content: str, max_line_chars: int = 1000) -> str:
-    """给代码行加上哈希锚点，格式如 '   12#XJ| return True'"""
-    content_stripped = content.rstrip('\r\n')
-    line_hash = get_line_hash(content_stripped)
-    
-    if len(content_stripped) > max_line_chars:
-        half = max_line_chars // 2
-        display_content = f"{content_stripped[:half]} ... [Truncated] ... {content_stripped[-50:]}"
-    else:
-        display_content = content_stripped
-        
-    return f"{line_number:5}#{line_hash}| {display_content}"
-
-def apply_hashline_edits(file_content: str, edits: list) -> tuple[bool, str, str]:
-    """
-    核心哈希替换引擎（支持自动偏移修复 Auto-Healing）
-    """
-    file_content = file_content.replace('\r\n', '\n')
-    lines = file_content.split('\n')
-    
-    # --- 辅助函数：自动寻路 ---
-    def find_actual_index(expected_idx: int, expected_hash: str, window: int = 50) -> int:
-        """在 expected_idx 附近寻找哈希匹配的行"""
-        # 1. 首先尝试精确匹配（没有发生行号偏移的情况，速度最快）
-        if 0 <= expected_idx < len(lines):
-            if get_line_hash(lines[expected_idx]) == expected_hash:
-                return expected_idx
-                
-        # 2. 如果不匹配，说明 file 可能被插入/删除了行，启动上下滑动窗口搜索
-        start = max(0, expected_idx - window)
-        end = min(len(lines), expected_idx + window + 1)
-        
-        matches = []
-        for i in range(start, end):
-            if get_line_hash(lines[i]) == expected_hash:
-                matches.append(i)
-                
-        if len(matches) == 1:
-            # 刚好在附近找到唯一的一个匹配，完美修复偏移
-            return matches[0]
-        elif len(matches) > 1:
-            raise ValueError(f"Hash '{expected_hash}' is ambiguous in the nearby window. Multiple identical lines found. Please provide more context or re-read the file.")
-        else:
-            raise ValueError(f"Hash '{expected_hash}' not found near line {expected_idx+1}. The file content may have been heavily modified.")
-
-    try:
-        parsed_edits = []
-        for edit in edits:
-            start_anchor = str(edit.get('start_anchor', ''))
-            end_anchor = str(edit.get('end_anchor', '')) or start_anchor
-            new_content = edit.get('new_content', '')
-            
-            def parse_anchor(anchor: str):
-                if not anchor or '#' not in anchor:
-                    raise ValueError(f"Invalid anchor format: {anchor}")
-                num_str, rest = anchor.split('#', 1)
-                line_num = int(num_str.strip())
-                
-                # 防御 AI 复制幻觉
-                if '|' in rest:
-                    hash_str = rest.split('|')[0].strip()
-                else:
-                    hash_str = rest.strip()[:2]
-                return line_num, hash_str
-            
-            s_num, s_hash = parse_anchor(start_anchor)
-            e_num, e_hash = parse_anchor(end_anchor)
-            
-            if s_num > e_num:
-                raise ValueError(f"start_anchor line ({s_num}) > end_anchor line ({e_num})")
-            
-            # --- 使用自动寻路寻找真正的索引 ---
-            actual_s_idx = find_actual_index(s_num - 1, s_hash)
-            actual_e_idx = find_actual_index(e_num - 1, e_hash)
-            
-            if actual_s_idx > actual_e_idx:
-                raise ValueError("Start anchor found AFTER end anchor due to heavy file modifications.")
-            
-            parsed_edits.append({
-                'start_idx': actual_s_idx, 
-                'end_idx': actual_e_idx, 
-                'new_content': new_content
-            })
-        
-        # 必须从下往上修改（倒序），防止上面的修改导致下面的行号错位
-        parsed_edits.sort(key=lambda x: x['start_idx'], reverse=True)
-        
-        for edit in parsed_edits:
-            s_idx = edit['start_idx']
-            e_idx = edit['end_idx']
-            
-            replacement_lines = edit['new_content'].split('\n') if edit['new_content'] else []
-            
-            # ===== 新增：杜绝空行膨胀 =====
-            new_pad_start, new_pad_end = count_empty_padding(replacement_lines)
-            
-            # 检查锚点周围原文件的空行上下文
-            old_pad_start = 0
-            while s_idx - 1 - old_pad_start >= 0 and not lines[s_idx - 1 - old_pad_start].strip():
-                old_pad_start += 1
-            
-            old_pad_end = 0
-            while e_idx + 1 + old_pad_end < len(lines) and not lines[e_idx + 1 + old_pad_end].strip():
-                old_pad_end += 1
-            
-            # 抵消双方都有的填充空行
-            strip_front = min(old_pad_start, new_pad_start)
-            strip_back = min(old_pad_end, new_pad_end)
-            
-            if strip_front > 0 or strip_back > 0:
-                new_actual_end = len(replacement_lines) - strip_back
-                replacement_lines = replacement_lines[strip_front:new_actual_end]
-            # ===== 新增结束 =====
-            
-            lines[s_idx:e_idx+1] = replacement_lines
-            
-    except Exception as e:
-        return False, file_content, f"Hash Edit Failed: {str(e)}"
-        
-    return True, '\n'.join(lines), "Success"
 
 
 # 辅助函数：统计首尾的空行数量
@@ -333,9 +202,9 @@ def count_empty_padding(lines):
         end += 1
     return start, end
 
-def _apply_patch(content: str, old_string: str, new_string: str) -> tuple[bool, str, str]:
+def _apply_patch(content: str, old_string: str, new_string: str, replace_all: bool = False) -> tuple[bool, str, str]:
     """
-    高度鲁棒的补丁应用算法，解决 AI 换行符幻觉和“空行不断膨胀”的问题。
+    高度鲁棒的补丁应用算法，解决 AI 换行符幻觉和"空行不断膨胀"的问题。
     """
     # 统一换行符为 \n
     content_lf = content.replace('\r\n', '\n')
@@ -344,7 +213,16 @@ def _apply_patch(content: str, old_string: str, new_string: str) -> tuple[bool, 
 
     # 1. 绝对精确匹配 (速度最快，且绝不产生多余空行)
     if old_lf in content_lf:
-        return True, content_lf.replace(old_lf, new_lf, 1), "Exact match successful."
+        if replace_all:
+            # 检查是否至少有一个匹配（str.replace 自身会处理）
+            new_content = content_lf.replace(old_lf, new_lf)
+            count = content_lf.count(old_lf)
+            return True, new_content, f"Replaced {count} occurrence(s)."
+        else:
+            count = content_lf.count(old_lf)
+            if count > 1:
+                return False, content, f"[Error] old_string found {count} times in file. Provide more surrounding context to make it unique, or use replace_all=True."
+            return True, content_lf.replace(old_lf, new_lf, 1), "Exact match successful."
 
     # 2. 智能模糊匹配阶段
     content_lines = content_lf.split('\n')
@@ -361,6 +239,23 @@ def _apply_patch(content: str, old_string: str, new_string: str) -> tuple[bool, 
         return False, content, "old_string is empty or only contains whitespaces."
 
     # 滑动窗口匹配
+    def find_all_matches(ignore_leading=False):
+        matches = []
+        for i in range(len(content_lines) - len(old_stripped) + 1):
+            match = True
+            for j in range(len(old_stripped)):
+                c_line = content_lines[i+j].rstrip()
+                o_line = old_stripped[j].rstrip()
+                if ignore_leading:
+                    c_line = c_line.lstrip()
+                    o_line = o_line.lstrip()
+                if c_line != o_line:
+                    match = False
+                    break
+            if match:
+                matches.append(i)
+        return matches
+
     def find_match(ignore_leading=False):
         for i in range(len(content_lines) - len(old_stripped) + 1):
             match = True
@@ -376,6 +271,41 @@ def _apply_patch(content: str, old_string: str, new_string: str) -> tuple[bool, 
             if match:
                 return i
         return -1
+
+    if replace_all:
+        # replace_all: 找到所有模糊匹配并替换
+        matches = find_all_matches(ignore_leading=False)
+        match_type = "Fuzzy match (trailing whitespace)"
+        if not matches:
+            matches = find_all_matches(ignore_leading=True)
+            match_type = "Fuzzy match (leading+trailing whitespace)"
+
+        if matches:
+            # 从后往前替换，防止索引偏移
+            new_pad_start, new_pad_end = count_empty_padding(new_lines)
+            strip_front = min(old_pad_start, new_pad_start)
+            strip_back = min(old_pad_end, new_pad_end)
+            new_actual_end = len(new_lines) - strip_back
+            new_final = new_lines[strip_front : new_actual_end]
+
+            result_lines = list(content_lines)
+            for match_idx in reversed(matches):
+                end_idx = match_idx + len(old_stripped)
+                result_lines[match_idx:end_idx] = new_final
+
+            new_content = '\n'.join(result_lines)
+            return True, new_content, f"{match_type} - replaced {len(matches)} occurrence(s)."
+
+        # 匹配失败
+        first_line_clean = old_stripped[0].strip()
+        candidates = []
+        for i, line in enumerate(content_lines):
+            if first_line_clean and first_line_clean in line:
+                candidates.append(f"Line {i+1}: {line.strip()[:80]}")
+        err_msg = "[Error] old_string not found in file. Check line endings or indentation.\n"
+        if candidates:
+            err_msg += "Did you mean one of these locations?\n" + "\n".join(candidates[:5])
+        return False, content, err_msg
 
     match_idx = find_match(ignore_leading=False)
     msg = "Fuzzy match successful (ignored trailing whitespaces)."
@@ -963,40 +893,6 @@ async def docker_sandbox(command: str, background: bool = False, timeout: int = 
     except Exception as e:
         yield f"[ERROR] Docker 进程启动失败: {str(e)}"
 
-async def edit_file_patch_tool(path: str, edits: list) -> str:
-    """[Docker] 精确替换（基于 Hashline 重写，废弃 old_string）"""
-    try:
-        real_cwd = await _get_current_cwd()
-        container_name = await get_or_create_docker_sandbox(real_cwd)
-        
-        try:
-            script = f"""
-            import sys
-            with open("{path}", "rb") as f:
-                sys.stdout.buffer.write(f.read())
-            """
-            content = await _exec_docker_cmd_simple(real_cwd, ["python3", "-c", script])
-        except Exception as e:
-            return f"[Error] Cannot read file for patching: {e}"
-        
-        success, new_content, msg = apply_hashline_edits(content, edits)
-        if not success:
-            return msg # 把详细的哈希不匹配错误返回给 AI
-            
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8', newline='\n') as tmp:
-            tmp.write(new_content)
-            tmp_path = tmp.name
-        
-        dest_path = f"{container_name}:/workspace/{path}"
-        cp_proc = await asyncio.create_subprocess_exec("docker", "cp", tmp_path, dest_path, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        await cp_proc.communicate()
-        os.unlink(tmp_path)
-        
-        if cp_proc.returncode != 0: return "[Error] Patch copy failed."
-        return f"[Success] Patched '{path}' using Hashline. ({msg})"
-    except Exception as e:
-        return f"[Error] Patch failed: {str(e)}"
-
 async def glob_files_tool(pattern: str, exclude: str = "**/node_modules/**,**/.git/**,**/__pycache__/**") -> str:
     """[Docker] Glob 递归查找"""
     try:
@@ -1191,19 +1087,13 @@ async def list_files_tool(path: str = ".", show_all: bool = True) -> str:
     except Exception as e: return str(e)
 
 async def read_file_tool(path: str, start_line: int = None, end_line: int = None) -> str:
-    """[Docker] 读取文件（注入 Hashline）"""
+    """[Docker] 读取文件"""
     if start_line is not None or end_line is not None:
         return await read_file_range_tool(path, start_line or 1, end_line or 1)
     try:
         real_cwd = await _get_current_cwd()
-        # 用 Python 脚本替代 awk，确保多语言字符哈希计算的一致性
         script = f"""
-import sys, hashlib, base64
-def get_h(l):
-    c = l.rstrip('\\r\\n')
-    b = base64.b64encode(hashlib.md5(c.encode()).digest(), altchars=b'AB').decode()
-    c_b = ''.join(x for x in b if x.isalnum())
-    return c_b[:2].upper() if len(c_b)>=2 else 'XX'
+import sys
 
 try:
     with open("{path}", "rb") as f:
@@ -1218,9 +1108,8 @@ with open("{path}", "r", encoding="utf-8", errors="replace") as f:
         total = i
         if i <= 1000:
             c = line.rstrip('\\r\\n')
-            h = get_h(c)
             if len(c) > 1000: c = c[:500] + " ... [Truncated] ... " + c[-50:]
-            print(f"{{i:5}}#{{h}}| {{c}}")
+            print(f"{{i:5}}: {{c}}")
 
 if total > 1000:
     print(f"\\n... [Warning] File truncated. Showing 1 to 1000 of {{total}} lines.")
@@ -1230,25 +1119,18 @@ if total > 1000:
     except Exception as e: return f"[Error] Read failed: {str(e)}"
 
 async def read_file_range_tool(path: str, start_line: int, end_line: int) -> str:
-    """[Docker] 精准读取范围（包含你提到的范围读取，已注入 Hashline）"""
+    """[Docker] 精准读取指定行范围"""
     try:
         if start_line < 1 or end_line < start_line: return "[Error] Invalid line range."
         real_cwd = await _get_current_cwd()
         script = f"""
-import sys, hashlib, base64
-def get_h(l):
-    c = l.rstrip('\\r\\n')
-    b = base64.b64encode(hashlib.md5(c.encode()).digest(), altchars=b'AB').decode()
-    c_b = ''.join(x for x in b if x.isalnum())
-    return c_b[:2].upper() if len(c_b)>=2 else 'XX'
-
+import sys
 with open("{path}", "r", encoding="utf-8", errors="replace") as f:
     for i, line in enumerate(f, 1):
         if i >= {start_line} and i <= {end_line}:
             c = line.rstrip('\\r\\n')
-            h = get_h(c)
             if len(c) > 1000: c = c[:500] + " ... [Truncated] ... " + c[-50:]
-            print(f"{{i:5}}#{{h}}| {{c}}")
+            print(f"{{i:5}}: {{c}}")
         elif i > {end_line}: break
 """
         result = await _exec_docker_cmd_simple(real_cwd, ["python3", "-c", script])
@@ -1257,7 +1139,7 @@ with open("{path}", "r", encoding="utf-8", errors="replace") as f:
     except Exception as e: return str(e)
 
 async def tail_file_tool(path: str, lines: int = 100) -> str:
-    """[Docker] 读取末尾（注入 Hashline）"""
+    """[Docker] 读取文件末尾"""
     try:
         real_cwd = await _get_current_cwd()
         script = f"""
@@ -1265,17 +1147,11 @@ total=$(wc -l < "{path}" 2>/dev/null || echo 0)
 start=$((total - {lines} + 1))
 if [ $start -lt 1 ]; then start=1; fi
 awk -v s=$start 'NR>=s' "{path}" | python3 -c "
-import sys, hashlib, base64
-def get_h(l):
-    c = l.rstrip('\\r\\n')
-    b = base64.b64encode(hashlib.md5(c.encode()).digest(), altchars=b'AB').decode()
-    c_b = ''.join(x for x in b if x.isalnum())
-    return c_b[:2].upper() if len(c_b)>=2 else 'XX'
+import sys
 start_idx = int(sys.argv[1])
 for i, line in enumerate(sys.stdin, start_idx):
     c = line.rstrip('\\r\\n')
-    h = get_h(c)
-    print(f'{{i:5}}#{{h}}| {{c}}')
+    print(f'{{i:5}}: {{c}}')
 " $start
 """
         raw_output = await _exec_docker_cmd_simple(real_cwd, ["sh", "-c", script])
@@ -1320,27 +1196,10 @@ def _mask_grep_output(grep_output: str) -> str:
 
 
 async def search_files_tool(pattern: str, path: str = ".") -> str:
-    """[Docker] Grep 搜索（实时附加 Hashline 锚点）"""
+    """[Docker] Grep 搜索"""
     try:
         real_cwd = await _get_current_cwd()
-        script = """
-import sys, hashlib, base64
-def get_h(l):
-    c = l.rstrip('\\r\\n')
-    b = base64.b64encode(hashlib.md5(c.encode()).digest(), altchars=b'AB').decode()
-    c_b = ''.join(x for x in b if x.isalnum())
-    return c_b[:2].upper() if len(c_b)>=2 else 'XX'
-
-for line in sys.stdin:
-    parts = line.split(':', 2)
-    if len(parts) >= 3:
-        filepath, lineno, content = parts[0], parts[1], parts[2]
-        h = get_h(content)
-        print(f"{filepath}:{lineno}#{h}:{content.rstrip()}")
-    else:
-        print(line.rstrip())
-"""
-        cmd = f"grep -rn '{pattern}' '{path}' | python3 -c \"{script}\""
+        cmd = f"grep -rn '{pattern}' '{path}'"
         raw_output = await _exec_docker_cmd_simple(real_cwd, ["sh", "-c", cmd])
         if '.env' in raw_output.lower(): return _mask_grep_output(raw_output)
         return raw_output
@@ -1684,7 +1543,7 @@ async def shell_tool_local(command: str, background: bool = False, timeout: int 
     # ==================== Windows 或 回退到标准 Shell 的情况 ====================
     
     if system == "Windows":
-        exe, args = "cmd.exe", ["/c", command]
+        exe, args = "powershell.exe", ["-NoLogo", "-NonInteractive", "-Command", command]
     else:
         # 非 Windows 环境回退或后台任务
         exe, args = os.environ.get('SHELL', '/bin/bash'), ["-c", command]
@@ -1796,8 +1655,14 @@ async def list_files_tool_local(path: str = ".", show_all: bool = True) -> str:
         return f"[Error] List failed: {str(e)}"
 
 def _format_line(line_number: int, content: str, max_line_chars: int = 1000) -> str:
-    """[Local 专属] 格式化单行。直接委托给全局的核心引擎，这样 read 和 read_range 会自动拥有锚点"""
-    return format_line_with_hash(line_number, content, max_line_chars)
+    """格式化单行为带行号的输出"""
+    content_stripped = content.rstrip('\r\n')
+    if len(content_stripped) > max_line_chars:
+        half = max_line_chars // 2
+        display_content = f"{content_stripped[:half]} ... [Truncated] ... {content_stripped[-50:]}"
+    else:
+        display_content = content_stripped
+    return f"{line_number:5}: {display_content}"
 
 async def read_file_tool_local(path: str, start_line: int = None, end_line: int = None) -> str:
     if start_line is not None or end_line is not None:
@@ -1886,7 +1751,7 @@ async def read_file_range_tool_local(path: str, start_line: int, end_line: int) 
         return f"[Error] Range read failed: {str(e)}"
 
 async def tail_file_tool_local(path: str, lines: int = 100) -> str:
-    """[Local] 读取文件末尾（注入 Hashline）"""
+    """[Local] 读取文件末尾"""
     try:
         cwd = await _get_current_cwd()
         target = resolve_strict_path(cwd, path, check_symlink=True)
@@ -1898,8 +1763,7 @@ async def tail_file_tool_local(path: str, lines: int = 100) -> str:
         subset = all_lines[-lines:] if lines < len(all_lines) else all_lines
         start_idx = max(1, len(all_lines) - lines + 1)
         
-        # 接入 Hashline 格式化
-        res = "\n".join(format_line_with_hash(i + start_idx, line) for i, line in enumerate(subset))
+        res = "\n".join(_format_line(i + start_idx, line) for i, line in enumerate(subset))
         return _maybe_mask_output(path, res)
     except Exception as e: return f"[Error] Tail failed: {str(e)}"
     
@@ -1947,13 +1811,13 @@ async def edit_file_tool_local(path: str, content: str) -> str:
         return f"[Error] Edit failed: {str(e)}"
 
 async def search_files_tool_local(pattern: str, path: str = ".") -> str:
-    """[Local] 智能搜索（附加 Hashline，支持搜完即改）"""
+    """[Local] 智能搜索：支持正则表达式，自动跳过二进制文件和常见忽略目录"""
     try:
         cwd = await _get_current_cwd()
         target_dir = resolve_strict_path(cwd, path, check_symlink=True)
         target_str = str(target_dir)
         
-        # 1. 放弃使用 git grep，因为它的输出不方便注入哈希，统一使用 Python 优化实现
+        # 使用 Python 实现搜索
         matches = []
         regex = re.compile(pattern)
         MAX_RESULTS = 1000
@@ -1984,11 +1848,9 @@ async def search_files_tool_local(pattern: str, path: str = ".") -> str:
                         for i, line in enumerate(lines, 1):
                             if regex.search(line):
                                 clean_line = line.strip()[:200]
-                                # 核心：获取这一行的独立哈希！
-                                line_hash = get_line_hash(line)
                                 if _is_env_file(file):
                                     clean_line = _mask_env_content(clean_line)
-                                matches.append(f"{display_path}:{i}#{line_hash}:{clean_line}")
+                                matches.append(f"{display_path}:{i}:{clean_line}")
                                 if len(matches) >= MAX_RESULTS:
                                     return "\n".join(matches) + f"\n... (Truncated at {MAX_RESULTS} matches)"
                 except Exception:
@@ -2047,8 +1909,8 @@ async def glob_files_tool_local(pattern: str, exclude: str = "") -> str:
     except Exception as e:
         return f"[Error] Glob failed: {str(e)}"
 
-async def edit_file_patch_tool_local(path: str, edits: list) -> str:
-    """[Local] 精确替换（基于 Hashline 重写，废弃 old_string）"""
+async def edit_file_string_tool_local(path: str, old_string: str, new_string: str, replace_all: bool = False) -> str:
+    """[Local] 精确字符串替换（基于 old_string/new_string，类似 opencode 的 Edit 工具）"""
     try:
         cwd = await _get_current_cwd()
         target = resolve_strict_path(cwd, path, check_symlink=True)
@@ -2058,21 +1920,56 @@ async def edit_file_patch_tool_local(path: str, edits: list) -> str:
         async with aiofiles.open(target, 'r', encoding='utf-8') as f:
             content = await f.read()
 
-        success, new_content, msg = apply_hashline_edits(content, edits)
+        success, new_content, msg = _apply_patch(content, old_string, new_string, replace_all)
         if not success:
-            return msg # 哈希拦截生效
+            return msg
 
         try:
             backup_path = target.with_suffix(target.suffix + ".bak")
             shutil.copy2(target, backup_path)
         except: pass
 
-        async with aiofiles.open(target, 'w', encoding='utf-8') as f:
+        async with aiofiles.open(target, 'w', encoding='utf-8', newline='\n') as f:
             await f.write(new_content)
-            
-        return f"[Success] Patched '{path}' using Hashline. ({msg})"
+
+        return f"[Success] {msg}"
     except Exception as e:
-        return f"[Error] Patch failed: {str(e)}"
+        return f"[Error] String edit failed: {str(e)}"
+
+async def edit_file_string_tool(path: str, old_string: str, new_string: str, replace_all: bool = False) -> str:
+    """[Docker] 精确字符串替换（基于 old_string/new_string，类似 opencode 的 Edit 工具）"""
+    try:
+        real_cwd = await _get_current_cwd()
+        container_name = await get_or_create_docker_sandbox(real_cwd)
+
+        try:
+            script = f"""
+            import sys
+            with open("{path}", "rb") as f:
+                sys.stdout.buffer.write(f.read())
+            """
+            content = await _exec_docker_cmd_simple(real_cwd, ["python3", "-c", script])
+        except Exception as e:
+            return f"[Error] Cannot read file for editing: {e}"
+
+        success, new_content, msg = _apply_patch(content, old_string, new_string, replace_all)
+        if not success:
+            return msg
+
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8', newline='\n') as tmp:
+            tmp.write(new_content)
+            tmp_path = tmp.name
+
+        dest_path = f"{container_name}:/workspace/{path}"
+        cp_proc = await asyncio.create_subprocess_exec("docker", "cp", tmp_path, dest_path, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        await cp_proc.communicate()
+        os.unlink(tmp_path)
+
+        if cp_proc.returncode != 0:
+            return "[Error] String edit copy failed."
+        return f"[Success] {msg}"
+    except Exception as e:
+        return f"[Error] String edit failed: {str(e)}"
 
 async def todo_write_tool_local(action: str, id: str = None, content: str = None, 
                                 priority: str = "medium", status: str = None) -> str:
@@ -2478,41 +2375,32 @@ TOOLS_REGISTRY = {
             }
         }
     },
-    "edit_file_patch": {
+    "edit_file_string": {
         "type": "function", "function": {
-            "name": "edit_file_patch_tool", 
-            "description": "Precise replacement using Hash-Anchored Edits (Hashline). Highly recommended for modifying existing files safely.",
+            "name": "edit_file_string_tool",
+            "description": "Performs exact string replacements in files. The edit will FAIL if old_string is not unique in the file. Provide larger strings with more surrounding context to make it unique. If you want to replace all occurrences, use replace_all: true.",
             "parameters": {
-                "type": "object", 
+                "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
                         "description": "Relative path to file (from workspace root)."
-                    }, 
-                    "edits": {
-                        "type": "array",
-                        "description": "List of edits to apply.",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "start_anchor": {
-                                    "type": "string", 
-                                    "description": "The exact anchor from read tools, e.g., '12#XJ'. It MUST include both the line number and the 2-char hash. Don't worry if line numbers have slightly shifted due to other edits; the system has auto-healing to find the correct hash nearby."
-                                },
-                                "end_anchor": {
-                                    "type": "string",
-                                    "description": "Optional. e.g., '15#MB'. The line to end replacing. If omitted, only start_anchor is replaced."
-                                },
-                                "new_content": {
-                                    "type": "string",
-                                    "description": "The exact new content to replace the anchored block. To INSERT before a line, replace the line with itself prefixed by the new content.Note! Hash-Anchored must not appear in new_content; Hash-Anchored can only come from the output of the read tool, not from you!"
-                                }
-                            },
-                            "required": ["start_anchor", "new_content"]
-                        }
+                    },
+                    "old_string": {
+                        "type": "string",
+                        "description": "The exact text to replace. Must match exactly including whitespace and indentation."
+                    },
+                    "new_string": {
+                        "type": "string",
+                        "description": "The exact text to replace it with (must be different from old_string)."
+                    },
+                    "replace_all": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Replace all occurrences of old_string (default false). When false, the edit will FAIL if old_string is found multiple times."
                     }
-                }, 
-                "required": ["path", "edits"]
+                },
+                "required": ["path", "old_string", "new_string"]
             }
         }
     },
@@ -2782,37 +2670,32 @@ LOCAL_TOOLS_REGISTRY = {
             }
         }
     },
-    "edit_file_patch_local": {
+    "edit_file_string_local": {
         "type": "function", "function": {
-            "name": "edit_file_patch_tool_local", 
-            "description": "Patch local file using Hash-Anchored Edits (Hashline). Highly recommended for partial edits to prevent data loss.",
+            "name": "edit_file_string_tool_local",
+            "description": "Performs exact string replacements in local files. The edit will FAIL if old_string is not unique in the file. Provide larger strings with more surrounding context to make it unique. If you want to replace all occurrences, use replace_all: true.",
             "parameters": {
-                "type": "object", 
+                "type": "object",
                 "properties": {
-                    "path": {"type": "string"}, 
-                    "edits": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "start_anchor": {
-                                    "type": "string", 
-                                    "description": "The exact anchor from read tools, e.g., '12#XJ'. It MUST include both the line number and the 2-char hash. Don't worry if line numbers have slightly shifted due to other edits; the system has auto-healing to find the correct hash nearby."
-                                },
-                                "end_anchor": {
-                                    "type": "string",
-                                    "description": "Optional. e.g., '15#MB'. The line to end replacing. If omitted, only start_anchor is replaced."
-                                },
-                                "new_content": {
-                                    "type": "string",
-                                    "description": "The exact new content to replace the anchored block. To INSERT before a line, replace the line with itself prefixed by the new content.Note! Hash-Anchored must not appear in new_content; Hash-Anchored can only come from the output of the read tool, not from you!"
-                                }
-                            },
-                            "required": ["start_anchor", "new_content"]
-                        }
+                    "path": {
+                        "type": "string",
+                        "description": "Relative path to file (from current working directory)."
+                    },
+                    "old_string": {
+                        "type": "string",
+                        "description": "The exact text to replace. Must match exactly including whitespace and indentation."
+                    },
+                    "new_string": {
+                        "type": "string",
+                        "description": "The exact text to replace it with (must be different from old_string)."
+                    },
+                    "replace_all": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Replace all occurrences of old_string (default false). When false, the edit will FAIL if old_string is found multiple times."
                     }
-                }, 
-                "required": ["path", "edits"]
+                },
+                "required": ["path", "old_string", "new_string"]
             }
         }
     },
@@ -2966,7 +2849,7 @@ def get_tools_for_mode(mode: str) -> list:
             TOOLS_REGISTRY["read_skill"]
             ]
     # 编辑
-    edit = [TOOLS_REGISTRY["edit_file"], TOOLS_REGISTRY["edit_file_patch"], TOOLS_REGISTRY["todo_write"]]
+    edit = [TOOLS_REGISTRY["edit_file"], TOOLS_REGISTRY["edit_file_string"], TOOLS_REGISTRY["todo_write"]]
     # 基础设施 (执行/进程/端口)
     infra = [TOOLS_REGISTRY["bash"], TOOLS_REGISTRY["list_processes"], TOOLS_REGISTRY["get_process_logs"], TOOLS_REGISTRY["kill_process"], TOOLS_REGISTRY["manage_ports"]]
     
@@ -2986,7 +2869,7 @@ def get_local_tools_for_mode(mode: str) -> list:
         LOCAL_TOOLS_REGISTRY["glob_files_local"],
         LOCAL_TOOLS_REGISTRY["read_skill_local"] 
     ]
-    edit = [LOCAL_TOOLS_REGISTRY["edit_file_local"], LOCAL_TOOLS_REGISTRY["edit_file_patch_local"], LOCAL_TOOLS_REGISTRY["todo_write_local"]]
+    edit = [LOCAL_TOOLS_REGISTRY["edit_file_local"], LOCAL_TOOLS_REGISTRY["edit_file_string_local"], LOCAL_TOOLS_REGISTRY["todo_write_local"]]
     infra = [
         LOCAL_TOOLS_REGISTRY["bash_local"], 
         LOCAL_TOOLS_REGISTRY["list_processes"], LOCAL_TOOLS_REGISTRY["get_process_logs"], LOCAL_TOOLS_REGISTRY["kill_process"],

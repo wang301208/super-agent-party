@@ -61,12 +61,13 @@ from py.acpx_tools import acp_agent_tool, acpx_agent
 # Extended CLI tool imports for dispatch_tool
 from py.cli_tool import (
     docker_sandbox, list_files_tool, read_file_tool, read_file_range_tool,
-    tail_file_tool, search_files_tool, edit_file_tool, edit_file_patch_tool,
-    glob_files_tool, todo_write_tool, list_processes_tool, get_process_logs_tool,
-    kill_process_tool, docker_manage_ports_tool, read_skill_tool,
-    shell_tool_local, list_files_tool_local, read_file_range_tool_local,
-    tail_file_tool_local, search_files_tool_local, edit_file_tool_local,
-    edit_file_patch_tool_local, glob_files_tool_local, todo_write_tool_local,
+    tail_file_tool, search_files_tool, edit_file_tool,
+    edit_file_string_tool, glob_files_tool, todo_write_tool, list_processes_tool,
+    get_process_logs_tool, kill_process_tool, docker_manage_ports_tool,
+    read_skill_tool, shell_tool_local, list_files_tool_local,
+    read_file_tool_local, read_file_range_tool_local, tail_file_tool_local,
+    search_files_tool_local, edit_file_tool_local,
+    edit_file_string_tool_local, glob_files_tool_local, todo_write_tool_local,
     local_net_tool, send_process_input_tool, read_skill_tool_local,
     get_tools_for_mode, get_local_tools_for_mode,
 )
@@ -1182,7 +1183,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict,is_sub
         "tail_file_tool": tail_file_tool,             # <--- 映射新工具
         "search_files_tool": search_files_tool,
         "edit_file_tool": edit_file_tool,
-        "edit_file_patch_tool": edit_file_patch_tool,
+        "edit_file_string_tool": edit_file_string_tool,
         "glob_files_tool": glob_files_tool,
         "todo_write_tool": todo_write_tool,
         "list_processes_tool": list_processes_tool,
@@ -1199,7 +1200,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict,is_sub
         "tail_file_tool_local": tail_file_tool_local,             # <--- 映射新工具
         "search_files_tool_local": search_files_tool_local,     # 本地文件搜索
         "edit_file_tool_local": edit_file_tool_local,           # 本地文件写入
-        "edit_file_patch_tool_local": edit_file_patch_tool_local,  # 本地精确替换
+        "edit_file_string_tool_local": edit_file_string_tool_local,  # 本地字符串替换
         "glob_files_tool_local": glob_files_tool_local,         # 本地 glob 查找
         "todo_write_tool_local": todo_write_tool_local,         # 本地任务管理
         "local_net_tool": local_net_tool,                       # 本地网络工具
@@ -1243,10 +1244,10 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict,is_sub
     SENSITIVE_TOOLS = [
         "docker_sandbox",
         "edit_file_tool",
-        "edit_file_patch_tool",          
+        "edit_file_string_tool",
         "shell_tool_local",
         "edit_file_tool_local",
-        "edit_file_patch_tool_local",
+        "edit_file_string_tool_local",
         "list_processes_tool",
         "get_process_logs_tool",
         "kill_process_tool",
@@ -1283,7 +1284,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict,is_sub
         # 允许文件编辑类工具（包括全量写入、精确替换、任务管理）
         # 但依然拦截终端命令（docker/bash）
         elif permission_mode == "auto-approve":
-            if tool_name in ["edit_file_tool", "edit_file_patch_tool", "todo_write_tool", "edit_file_tool_local", "edit_file_patch_tool_local", "todo_write_tool_local"]:
+            if tool_name in ["edit_file_tool", "edit_file_string_tool", "todo_write_tool", "edit_file_tool_local", "edit_file_string_tool_local", "todo_write_tool_local"]:
                 is_allowed = True
             # docker/bash 等危险命令在此模式下依然默认拦截，除非在项目白名单中
         
@@ -2025,9 +2026,9 @@ def get_system_context() -> str:
     
     # 检测 shell
     if system == "Windows":
-        shell = "CMD"
+        shell = "PowerShell"
         path_hint = "使用 Windows 路径格式（C:\\Users\\name\\file），命令使用 dir、copy、del 等"
-        command_hint = f"当前使用 {shell}，命令语法为 Windows 风格。避免使用 Unix 命令（ls/cat/rm），改用 dir/type/del"
+        command_hint = f"当前使用 {shell}，优先使用 PowerShell cmdlet（如 Get-ChildItem、Get-Content、Remove-Item），也兼容部分 CMD 命令。避免使用 Unix 命令（ls/cat/rm）"
     elif system == "Darwin":
         shell = os.path.basename(os.environ.get('SHELL', '/bin/zsh'))
         path_hint = "使用 Unix 路径格式（/Users/name/file），区分大小写"
