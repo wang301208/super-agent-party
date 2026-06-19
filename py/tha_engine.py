@@ -597,6 +597,21 @@ class THAModelManager:
             with zipfile.ZipFile(io.BytesIO(zip_data), 'r') as zf:
                 zf.extractall(target_dir)
 
+            # Normalize Windows-style backslash paths (macOS/Linux compatibility)
+            for entry in os.listdir(target_dir):
+                if '\\' not in entry:
+                    continue
+                src = os.path.join(target_dir, entry)
+                normalized = entry.replace('\\', os.sep)
+                if normalized.endswith(os.sep):
+                    os.makedirs(os.path.join(target_dir, normalized.rstrip(os.sep)), exist_ok=True)
+                    if os.path.exists(src):
+                        os.remove(src)
+                else:
+                    dst = os.path.join(target_dir, normalized)
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    shutil.move(src, dst)
+
             # Find .mlpackage directory
             mlpkg_found = False
             for root, dirs, files in os.walk(target_dir):
