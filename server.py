@@ -776,17 +776,33 @@ async def lifespan(app: FastAPI):
     scheduler_task = asyncio.create_task(scheduler.start_loop())
 
     # --- [日志系统初始化] ---
+
     timestamp = time.time()
     log_path = os.path.join(LOG_DIR, f"backend_{timestamp}.log")
     logger = logging.getLogger("app")
+
     if not logger.handlers:
         logger.setLevel(logging.INFO)
-        handler = logging.StreamHandler()
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        
+        # 1. 格式化器（控制台和文件共用一套格式）
+        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        
+        # 2. 控制台输出（保留，方便实时看）
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+        
+        # 3. 【新增】文件输出（这才是真正存盘的）
+        # 确保目录存在，否则会报错
+        os.makedirs(LOG_DIR, exist_ok=True)
+        file_handler = logging.FileHandler(log_path, encoding='utf-8')
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+
     logger.info("===== 日志系统初始化成功 =====")
     logger.info(f"用户数据目录: {USER_DATA_DIR}")
     logger.info(f"设置数据库路径: {DATABASE_PATH}")
+    logger.info(f"日志文件保存至: {log_path}")  # 额外加一行，方便确认路径
 
     # --- [代理与 HTTP 客户端初始化] ---
     proxy_url = None
@@ -1241,7 +1257,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict,is_sub
     
     # ==================== 3. 权限拦截逻辑 (Human-in-the-loop) ====================
     # 定义受控的敏感工具列表
-    # 这些工具在执行前需要检查权限配置 (.agent/config.json 或 全局设置)
+    # 这些工具在执行前需要检查权限配置 (.agents/config.json 或 全局设置)
     SENSITIVE_TOOLS = [
         "docker_sandbox",
         "edit_file_tool",
@@ -1293,7 +1309,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict,is_sub
         # 默认全部拦截
         
         # --- 规则 D: 项目级白名单覆盖 (Project Config Override) ---
-        # 如果以上规则未通过，检查 .agent/config.json
+        # 如果以上规则未通过，检查 .agents/config.json
         # 如果用户之前点击过 "Allow Always"，这里会返回 True
         if not is_allowed and cwd:
             if is_tool_allowed_by_project_config(cwd, tool_name):
@@ -1390,7 +1406,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict,is_sub
             import aiofiles
             
             consensus_content = None
-            consensus_file = Path(cwd) / ".agent" / "consensus.md"
+            consensus_file = Path(cwd) / ".agents" / "consensus.md"
             if consensus_file.exists():
                 async with aiofiles.open(consensus_file, 'r', encoding='utf-8') as f:
                     consensus_content = await f.read()
@@ -1991,7 +2007,7 @@ async def images_add_in_messages(request_messages: List[Dict], images: List[Dict
 
 async def read_todos_local(cwd: str) -> list:
     """读取本地待办事项（跨平台）"""
-    todo_file = Path(cwd) / ".agent" / "ai_todos.json"
+    todo_file = Path(cwd) / ".agents" / "ai_todos.json"
     if not todo_file.exists():
         return []
     
@@ -2007,7 +2023,7 @@ async def read_todos_local(cwd: str) -> list:
 
 async def read_agents_md(cwd: str) -> str:  # 返回str而不是list
     """读取本地AGENTS.md文件内容"""
-    agents_md_path = Path(cwd) / ".agent" / "AGENTS.md"
+    agents_md_path = Path(cwd) / ".agents" / "AGENTS.md"
     
     if not agents_md_path.exists():
         return ""
@@ -2074,8 +2090,8 @@ async def get_project_skills_summary(cwd: str, visibility_scope: str = "workspac
     
     # 根据可见范围选择不同的技能目录
     if visibility_scope == "workspace":
-        # 工作区技能：从项目目录的 .agent/skills 查找
-        skills_root = Path(cwd) / ".agent" / "skills"
+        # 工作区技能：从项目目录的 .agents/skills 查找
+        skills_root = Path(cwd) / ".agents" / "skills"
         scope_name = "工作区"
     elif visibility_scope == "global":
         # 全局技能：从常量 SKILLS_DIR 查找
@@ -2630,7 +2646,7 @@ Assistant: 表格如下：
     # ==================== 半固定文件注入（系统消息，变化频率低） ====================
     if cwd and Path(cwd).exists() and cli_settings.get("enabled", False):
         # MEMORY.md
-        memory_file = Path(cwd) / ".agent" / "MEMORY.md"
+        memory_file = Path(cwd) / ".agents" / "MEMORY.md"
         if memory_file.exists() and memory_file.is_file():
             try:
                 import aiofiles
@@ -2645,7 +2661,7 @@ Assistant: 表格如下：
         try:
             agents_md = await read_agents_md(cwd)
             if agents_md:
-                content_append(request.messages, 'system', " **重要事项**（.agent/AGENTS.md）：\n\n"+agents_md+"\n\n")
+                content_append(request.messages, 'system', " **重要事项**（.agents/AGENTS.md）：\n\n"+agents_md+"\n\n")
         except Exception as e:
             print(f"[Agent Loader] 跳过AGENTS.md加载: {e}")
             pass
@@ -2706,7 +2722,7 @@ Assistant: 表格如下：
                 status_icons = {"pending": "⏳", "in_progress": "🔄", "done": "✅", "cancelled": "❌"}
                 priority_order = {"high": 0, "medium": 1, "low": 2}
                 todos_sorted = sorted(todos, key=lambda x: (priority_order.get(x.get('priority', 'medium'), 1), x.get('created_at', '')))
-                todo_lines = ["\n\n当你完成一个事项后，请记得使用todo_write_tool更新项目待办事项，所有事项结束后，可以删除本事项文件\n\n📋 **当前项目待办事项**（.agent/ai_todos.json）：\n"]
+                todo_lines = ["\n\n当你完成一个事项后，请记得使用todo_write_tool更新项目待办事项，所有事项结束后，可以删除本事项文件\n\n📋 **当前项目待办事项**（.agents/ai_todos.json）：\n"]
                 pending_count = 0
                 for todo in todos_sorted:
                     status = todo.get('status', 'pending')
@@ -2824,12 +2840,12 @@ Assistant: 表格如下：
                 mem_content_to_save = user_text_trimmed[1:].strip()
                 if mem_content_to_save:
                     try:
-                        agent_dir = Path(cwd) / ".agent"
+                        agent_dir = Path(cwd) / ".agents"
                         agent_dir.mkdir(parents=True, exist_ok=True)
                         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         append_text = f"\n- [{timestamp}] {mem_content_to_save}"
                         import aiofiles
-                        async with aiofiles.open(Path(cwd) / ".agent" / "MEMORY.md", 'a', encoding='utf-8') as mf:
+                        async with aiofiles.open(Path(cwd) / ".agents" / "MEMORY.md", 'a', encoding='utf-8') as mf:
                             await mf.write(append_text)
                         # 注入到用户消息末尾
                         if request.messages[-1]['role'] == 'user':
@@ -2840,7 +2856,7 @@ Assistant: 表格如下：
                 parts = user_text_trimmed[1:].split()
                 if parts:
                     skill_name = parts[0]
-                    skill_dir = Path(cwd) / ".agent" / "skills" / skill_name
+                    skill_dir = Path(cwd) / ".agents" / "skills" / skill_name
                     if skill_dir.exists() and skill_dir.is_dir():
                         doc_file_path = None
                         for name in ["SKILL.md", "skill.md", "SKILLS.md", "skills.md"]:
@@ -7200,7 +7216,7 @@ async def create_task_endpoint(req: TaskCreateRequest):
         
         # 2. 读取共识（可选）
         consensus_content = None
-        consensus_file = Path(workspace_dir) / ".agent" / "consensus.md"
+        consensus_file = Path(workspace_dir) / ".agents" / "consensus.md"
         if consensus_file.exists():
             import aiofiles
             async with aiofiles.open(consensus_file, 'r', encoding='utf-8') as f:
