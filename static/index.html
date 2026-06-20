@@ -355,7 +355,7 @@ function updateElement(el, rawMarkdown, formatFn) {
           </el-icon>
         </el-button>
         <!-- ★ 移动端：展示Aside控制按钮 & 新增扩展栏弹出按钮 ★ -->
-        <template v-if="isMobile">
+        <template v-if="isMobile&&!isCapsuleMode">
           <!-- 移动端 Aside 导航折叠按钮 -->
           <el-button 
             class="top-bar-btn"
@@ -417,6 +417,16 @@ function updateElement(el, rawMarkdown, formatFn) {
           :title="t('CapsuleMode')">
           <el-icon>
             <i class="fa-solid fa-capsules"></i>
+          </el-icon>
+        </el-button>
+        <el-button 
+          @click="toggleMinimalMode"
+          v-if="!isCapsuleMode&&!isAssistantMode&&!isMobile"
+          class="top-bar-btn"
+          text
+          :title="isMinimalMode ? t('minimalModeClose') : t('minimalMode')">
+          <el-icon>
+            <i class="fa-solid fa-feather"></i>
           </el-icon>
         </el-button>
         <el-button 
@@ -6332,7 +6342,8 @@ function updateElement(el, rawMarkdown, formatFn) {
                   v-model="showAddDialog"
                   id="show-Add-Dialog"
                   :title="t('addNewProvider')"
-                  width="900px"
+                  width="80%"
+                  top="5vh"
                   @closed="newProviderTemp = { vendor: '', url: '', apiKey: '', modelId: '', models: [], modelsLoading: false, connectionStatus: null }; searchQuery = ''; activeCategory = 'all'"
                 >
                   <!-- 搜索和分类过滤 —— 双栏上方全宽 -->

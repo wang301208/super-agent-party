@@ -821,6 +821,12 @@ const app = Vue.createApp({
     this.initDownloadButtons();
     
     if (isElectron) {
+      // 监听极简窗口关闭事件（同步状态）
+      if (window.electronAPI.onMinimalWindowClosed) {
+        window.electronAPI.onMinimalWindowClosed(() => {
+          this.isMinimalMode = false;
+        });
+      }
       // 检查更新
       this.checkForUpdates();
       // 监听更新事件

@@ -2297,6 +2297,16 @@ formatMessage(content, index) {
         else if (data.type === "trigger_clear_message" ){
           this.clearMessages();
         }
+        // 新增：接收来自其他窗口的消息同步
+        else if (data.type === 'messages_update') {
+          if (data.data && data.data.messages && !this.isSending) {
+            this.messages = data.data.messages;
+            if (data.data.conversationId) {
+              this.conversationId = data.data.conversationId;
+            }
+            this.$nextTick(() => { this.requestScrollToBottom(); });
+          }
+        }
         // 新增：响应请求消息列表
         else if (data.type === 'request_messages') {
           // 发送当前消息列表给请求方
@@ -2552,7 +2562,9 @@ formatMessage(content, index) {
         if (this.messages.length > 0) {
             const lastMsg = this.messages[this.messages.length - 1];
             if (lastMsg._currentAudio){
-                lastMsg._currentAudio.pause();
+                if (typeof lastMsg._currentAudio.pause === 'function') {
+                    lastMsg._currentAudio.pause();
+                }
                 lastMsg._currentAudio = null;
             }
         }
@@ -10543,7 +10555,7 @@ processMarkdownStreamForTTS(message, deltaText, isFinal = false) {
         message.audioAborted = true; 
         message.isPlaying = false;
         // 快速淡出并停止每一条消息正在播放的音频
-        if (message._currentAudio && !message._currentAudio.paused) {
+        if (message._currentAudio && typeof message._currentAudio.pause === 'function' && !message._currentAudio.paused) {
           const audio = message._currentAudio;
           const fadeSteps = 5;
           const fadeInterval = 30;
@@ -13841,6 +13853,25 @@ isTargetPlatform(behavior, platformKey) {
     }
     this.sidePanelOpen = false;
     this.isCapsuleMode = !this.isCapsuleMode;
+  },
+  toggleMinimalMode() {
+    if (!this.isMinimalMode) {
+      // 进入极简模式：打开独立极简窗口
+      window.electronAPI.openMinimalWindow();
+      this.isMinimalMode = true;
+
+      // 监听极简窗口关闭事件（同步状态）
+      if (window.electronAPI.onMinimalWindowClosed) {
+        window.electronAPI.onMinimalWindowClosed(() => {
+          this.isMinimalMode = false;
+        });
+      }
+    } else {
+      // 退出极简模式：关闭极简窗口
+      window.electronAPI.closeMinimalWindow();
+      this.isMinimalMode = false;
+    }
+    this.sidePanelOpen = false;
   },
   addPrompt() {
     this.promptForm = { id: null, name: '', content: '' };

@@ -19,6 +19,7 @@ let vmcReceiverActive = false;  // 接收是否运行
 let vrmWindows = [];
 let thaWindows = [];
 let shotOverlay = null
+let minimalWindow = null
 let isMac = process.platform === 'darwin';
 const vmcSendSocket = dgram.createSocket('udp4'); // 发送复用同一 socket
 const MAX_LOG_LINES = 2000; // 保留最近2000行日志
@@ -971,6 +972,66 @@ app.whenReady().then(async () => {
       }
       
       return extensionWindow.id;
+    });
+
+    // === 极简模式窗口 ===
+    ipcMain.handle('open-minimal-window', async () => {
+      // 如果已有窗口，关闭旧的
+      if (minimalWindow && !minimalWindow.isDestroyed()) {
+        minimalWindow.close();
+        minimalWindow = null;
+      }
+
+      const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize;
+      const winW = 520;
+      const winH = 420;
+
+      minimalWindow = new BrowserWindow({
+        width: winW,
+        height: winH,
+        x: Math.round(screenW - winW - 40),
+        y: Math.round((screenH - winH) / 2),
+        frame: false,
+        transparent: true,
+        alwaysOnTop: true,
+        skipTaskbar: false,
+        hasShadow: true,
+        resizable: true,
+        backgroundColor: 'rgba(0, 0, 0, 0)',
+        webPreferences: {
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: false,
+          webSecurity: false,
+          devTools: isDev,
+          preload: path.join(__dirname, 'static/js/preload.js')
+        }
+      });
+
+      remoteMain.enable(minimalWindow.webContents);
+      await minimalWindow.loadURL(`http://${HOST}:${PORT}/minimal.html`);
+
+      minimalWindow.on('closed', () => {
+        minimalWindow = null;
+        // 通知主窗口极简模式已关闭
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('minimal-window-closed');
+        }
+      });
+
+      return true;
+    });
+
+    ipcMain.handle('close-minimal-window', async () => {
+      if (minimalWindow && !minimalWindow.isDestroyed()) {
+        minimalWindow.close();
+        minimalWindow = null;
+      }
+      return true;
+    });
+
+    ipcMain.handle('get-minimal-window-state', async () => {
+      return !!(minimalWindow && !minimalWindow.isDestroyed());
     });
 
 

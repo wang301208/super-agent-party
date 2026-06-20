@@ -820,6 +820,7 @@ let vue_data = {
     showMoreButtonDialog: false,
     isAssistantMode: false,
     isCapsuleMode: false,
+    isMinimalMode: false,
     isFixedWindow: false,
     MoreButtonDict: [
       {"name": "brieflyButton", "enabled": true},
@@ -1870,7 +1871,7 @@ let vue_data = {
       'siliconflow': 'https://cloud.siliconflow.cn/i/yGxrNlGb',
       '302.AI': 'https://share.302.ai/Mtahd4',
       'aliyun': 'https://bailian.console.aliyun.com/?tab=model#/api-key',
-      'ZhipuAI': 'https://open.bigmodel.cn/usercenter/apikeys',
+      'ZhipuAI': 'https://open.bigmodel.cn/apikey/platform',
       'moonshot': 'https://platform.moonshot.cn/console/api-keys',
       'minimax': 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
       'MiMo': 'https://platform.xiaomimimo.com/#/console/api-keys',

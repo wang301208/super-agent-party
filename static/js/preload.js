@@ -129,6 +129,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   execCommand: (command) => ipcRenderer.invoke('exec-command', command),
   getPlatform: () => process.platform,
   openExtensionWindow: (url, extension) => ipcRenderer.invoke('open-extension-window', { url, extension }),
+  openMinimalWindow: () => ipcRenderer.invoke('open-minimal-window'),
+  closeMinimalWindow: () => ipcRenderer.invoke('close-minimal-window'),
+  getMinimalWindowState: () => ipcRenderer.invoke('get-minimal-window-state'),
+  onMinimalWindowClosed: (callback) => {
+    ipcRenderer.removeAllListeners('minimal-window-closed');
+    ipcRenderer.on('minimal-window-closed', () => callback());
+  },
   getBackendLogs: () => ipcRenderer.invoke('get-backend-logs'),
 
   onRemoteInstall: (callback) => ipcRenderer.on('remote-install-any', (_, payload) => callback(payload)),
