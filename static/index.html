@@ -17422,6 +17422,69 @@ function updateElement(el, rawMarkdown, formatFn) {
                         </div>
                         <pre><code class="hljs language-html">{{ browserEmbedCodeExamples }}</code></pre>
                       </div>
+
+                      <!-- 直播/录制 URL -->
+                      <el-alert
+                        type="info"
+                        :closable="false"
+                        class="mb-2"
+                      >
+                        {{ t('obsBrowserSourceNotice') }}
+                      </el-alert>
+
+                      <!-- 对话界面 URL -->
+                      <el-form-item :label="t('conversationUrl')" class="form-item-align" label-position="top">
+                        <el-input
+                          :value="partyURL+'/index.html'"
+                          readonly
+                          class="full-width-input"
+                        >
+                          <template #append>
+                            <el-button
+                              @click="copyURL(partyURL+'/index.html')"
+                              class="copy-btn"
+                            >
+                            <i class="fa-solid fa-copy"></i>
+                            </el-button>
+                          </template>
+                        </el-input>
+                      </el-form-item>
+
+                      <!-- 极简模式 URL -->
+                      <el-form-item :label="t('minimalModeUrl')" class="form-item-align" label-position="top">
+                        <el-input
+                          :value="partyURL+'/minimal.html'"
+                          readonly
+                          class="full-width-input"
+                        >
+                          <template #append>
+                            <el-button
+                              @click="copyURL(partyURL+'/minimal.html')"
+                              class="copy-btn"
+                            >
+                            <i class="fa-solid fa-copy"></i>
+                            </el-button>
+                          </template>
+                        </el-input>
+                      </el-form-item>
+
+                      <!-- chat 界面 URL -->
+                      <el-form-item :label="t('chatUrl')" class="form-item-align" label-position="top">
+                        <el-input
+                          :value="partyURL+'/chat.html'"
+                          readonly
+                          class="full-width-input"
+                        >
+                          <template #append>
+                            <el-button
+                              @click="copyURL(partyURL+'/chat.html')"
+                              class="copy-btn"
+                            >
+                            <i class="fa-solid fa-copy"></i>
+                            </el-button>
+                          </template>
+                        </el-input>
+                      </el-form-item>
                     </div>
                   </div>
                 </el-form>
