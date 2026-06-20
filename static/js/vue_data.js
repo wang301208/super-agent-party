@@ -820,6 +820,7 @@ let vue_data = {
     showMoreButtonDialog: false,
     isAssistantMode: false,
     isCapsuleMode: false,
+    isMinimalMode: false,
     isFixedWindow: false,
     MoreButtonDict: [
       {"name": "brieflyButton", "enabled": true},

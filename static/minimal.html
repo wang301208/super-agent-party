@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>极简模式</title>
+  <link rel="stylesheet" href="fontawesome/css/all.min.css">
+  <link rel="stylesheet" href="css/github-markdown.min.css">
+  <link rel="stylesheet" href="css/github.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="libs/markdown-it.min.js"></script>
+  <script src="libs/highlight.min.js"></script>
+  <style>
+    :root { color-scheme: light dark; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: transparent !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      height: 100%;
+      background: transparent;
+      padding: 16px 20px 2px 20px;
+    }
+
+    /* 消息瀑布流 — contain 解决透明窗口下气泡层不跟随滚动的问题 */
+    #message-area {
+      -webkit-app-region: no-drag;
+      flex: 0 1 auto;
+      min-height: 0;
+      max-height: 100%;
+      overflow-x: hidden;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 10px;
+      padding: 12px 4px 10px 4px;
+      scrollbar-width: none;
+      contain: paint;
+      will-change: scroll-position;
+      -webkit-transform: translateZ(0);
+      transform: translateZ(0);
+    }
+    #message-area::-webkit-scrollbar { display: none; }
+    #message-area.empty { display: none; }
+
+    .msg-user {
+      align-self: flex-end;
+      max-width: 86%;
+      padding: 10px 16px;
+      border-radius: 18px 18px 4px 18px;
+      background: var(--el-color-primary);
+      color: #fff;
+      font-size: 14px;
+      line-height: 1.6;
+      word-break: break-word;
+      flex-shrink: 0;
+    }
+
+    .msg-assistant-wrapper {
+      align-self: flex-start;
+      max-width: 92%;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+
+    .msg-bubble {
+      padding: 10px 14px;
+      border-radius: 18px 18px 18px 4px;
+      background: var(--el-bg-color);
+      border: 1px solid var(--el-border-color-lighter);
+      font-size: 14px;
+      line-height: 1.65;
+      word-break: break-word;
+      color: var(--el-text-color-primary);
+      width: fit-content;
+      max-width: 100%;
+      display: block;
+    }
+    .msg-bubble:empty { display: none; }
+    .msg-bubble pre { margin: 0 !important; border-radius: 10px; font-size: 12px; overflow-x: auto; }
+    .msg-bubble code { font-family: 'SF Mono','Fira Code','Cascadia Code',monospace; font-size: 12.5px; }
+    .msg-bubble pre code { font-size: 12px; }
+    .msg-bubble img { max-width: 100%; border-radius: 8px; }
+    .msg-bubble p { margin: 0; }
+    .msg-bubble p + p { margin-top: 0.4em; }
+    .msg-bubble ul, .msg-bubble ol { margin: 0; padding-left: 1.5em; }
+    .msg-bubble blockquote { margin: 0; padding-left: 12px; border-left: 3px solid var(--el-border-color-darker); color: var(--el-text-color-secondary); }
+    .msg-bubble table { font-size: 12px; border-collapse: collapse; width: 100%; }
+    .msg-bubble th, .msg-bubble td { padding: 4px 8px; border: 1px solid var(--el-border-color-lighter); }
+
+    .msg-think {
+      padding: 8px 14px;
+      border-radius: 10px;
+      background: var(--el-fill-color-light, rgba(128,128,128,0.04));
+      border-left: 3px solid var(--el-border-color-darker);
+      font-size: 12.5px;
+      color: var(--el-text-color-secondary);
+      width: fit-content;
+      max-width: 100%;
+    }
+
+    .input-container {
+      -webkit-app-region: no-drag;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    #close-btn {
+      position: absolute;
+      top: 10px;
+      right: 14px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: none;
+      background: var(--el-fill-color-light, rgba(128,128,128,0.08));
+      color: var(--el-text-color-secondary, #888);
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: all 0.15s;
+      z-index: 10;
+      padding: 0;
+    }
+    .input-container:hover #close-btn,
+    #close-btn:hover { opacity: 1; }
+    #close-btn:hover { background: rgba(255, 59, 48, 0.12); color: #ff3b30; }
+
+    #drag-bar {
+      -webkit-app-region: drag;
+      position: relative;
+      z-index: 5;
+      flex: 1;
+      align-self: stretch;
+      min-height: 34px;
+      margin: 0 8px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      opacity: 0.5;
+      transition: opacity 0.25s;
+      cursor: grab;
+      padding-bottom: 2px;
+    }
+    .hero-input-wrapper:hover #drag-bar,
+    #drag-bar:hover { opacity: 0.85; }
+    #drag-bar::after {
+      content: '';
+      width: 48px;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--el-text-color-secondary, #888);
+    }
+
+    #send-btn {
+      background: var(--el-color-primary) !important;
+      border: none;
+      border-radius: 50%;
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #fff;
+      font-size: 14px;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    #send-btn:hover { transform: scale(1.08); filter: brightness(1.1); }
+    #send-btn:active { transform: scale(0.95); }
+    #send-btn:disabled { opacity: 0.25; cursor: not-allowed; transform: none; filter: none; }
+  </style>
+</head>
+<body style="background: transparent;">
+  <div id="app">
+    <div id="message-area" class="empty"></div>
+    <div class="input-container">
+      <button id="close-btn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+      <div class="hero-input-wrapper">
+        <div>
+          <textarea id="user-input"
+            placeholder="输入消息，Enter 发送，Shift+Enter 换行"
+            rows="1"
+            style="border:none!important;box-shadow:none!important;background:transparent!important;font-size:16px;padding:16px 32px 8px 24px;color:var(--el-text-color-primary);line-height:1.6;outline:none;resize:none;width:100%;box-sizing:border-box;font-family:inherit;"></textarea>
+        </div>
+        <div class="hero-input-footer" style="display:flex;justify-content:space-between;align-items:center;">
+          <button id="new-chat-btn" title="新会话"
+            style="background:transparent;border:none;color:var(--el-text-color-secondary);font-size:15px;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:all 0.15s;">
+            <i class="fa-solid fa-comment-medical"></i>
+          </button>
+          <div id="drag-bar"></div>
+          <button id="send-btn" disabled title="发送 (Enter)">
+            <i class="fa-solid fa-paper-plane"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      var md = window.markdownit({
+        html: true, linkify: true, typographer: true,
+        highlight: function(str, lang) {
+          try {
+            var language = (lang && hljs.getLanguage(lang)) ? lang : 'plaintext';
+            return '<pre class="hljs"><code>' +
+              hljs.highlight(str, { language: language, ignoreIllegals: true }).value + '</code></pre>';
+          } catch(e) { return '<pre class="hljs"><code>' + esc(str) + '</code></pre>'; }
+        }
+      });
+
+      function esc(t) {
+        var m = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'};
+        return String(t).replace(/[&<>"']/g, function(c){ return m[c]; });
+      }
+
+      function splitBlocks(html) {
+        var div = document.createElement('div');
+        div.innerHTML = html;
+        var blocks = [], buf = '';
+        var isBlock = function(el) { return /^(P|PRE|UL|OL|BLOCKQUOTE|TABLE|H[1-6]|HR)$/.test(el.tagName); };
+        for (var i = 0; i < div.childNodes.length; i++) {
+          var n = div.childNodes[i];
+          if (n.nodeType === 3) { buf += n.textContent; }
+          else if (n.nodeType === 1 && isBlock(n)) { if (buf.trim()) { blocks.push('<p>' + buf.trim() + '</p>'); buf = ''; } blocks.push(n.outerHTML); }
+          else if (n.nodeType === 1) { buf += n.outerHTML || n.textContent || ''; }
+          else { buf += n.textContent || ''; }
+        }
+        if (buf.trim()) blocks.push('<p>' + buf.trim() + '</p>');
+        return blocks;
+      }
+
+      var msgArea = document.getElementById('message-area');
+      var userInput = document.getElementById('user-input');
+      var sendBtn = document.getElementById('send-btn');
+      var closeBtn = document.getElementById('close-btn');
+      var newChatBtn = document.getElementById('new-chat-btn');
+
+      var ws = null;
+      var messages = [];
+      var isGenerating = false;
+      var hbTimer = null;
+      var reconnTimer = null;
+
+      function connectWS() {
+        var p = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(p + '//' + location.host + '/ws');
+        ws.onopen = function() {
+          startHB();
+          ws.send(JSON.stringify({ type: 'get_messages', data: {} }));
+        };
+        ws.onmessage = function(e) { try { handleMsg(JSON.parse(e.data)); } catch(_) {} };
+        ws.onclose = function() { stopHB(); scheduleReconnect(); };
+        ws.onerror = function() { ws.close(); };
+      }
+
+      function startHB() {
+        stopHB();
+        hbTimer = setInterval(function() {
+          if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }));
+        }, 10000);
+      }
+      function stopHB() { if (hbTimer) { clearInterval(hbTimer); hbTimer = null; } }
+      function scheduleReconnect() {
+        if (reconnTimer) return;
+        reconnTimer = setTimeout(function() { reconnTimer = null; connectWS(); }, 5000);
+      }
+
+      function handleMsg(data) {
+        switch (data.type) {
+          case 'pong': break;
+          case 'settings':
+          case 'settings_update':
+            if (data.data) {
+              var theme = (data.data.systemSettings && data.data.systemSettings.theme) || data.data.theme;
+              if (theme) document.documentElement.setAttribute('data-theme', theme);
+            }
+            break;
+          case 'messages_update':
+            if (data.data && data.data.messages) {
+              messages = data.data.messages;
+              isGenerating = true;
+              smartRender();
+            }
+            break;
+          case 'trigger_send_message':
+            isGenerating = true;
+            break;
+          case 'trigger_clear_message':
+            messages = [];
+            msgArea.classList.add('empty');
+            msgArea.innerHTML = '';
+            isGenerating = false;
+            break;
+        }
+      }
+
+      function renderAssistantContent(msg, wrapper) {
+        // Priority: backend_content > content
+        var hasContent = false;
+
+        if (msg.backend_content && Array.isArray(msg.backend_content) && msg.backend_content.length > 0) {
+          for (var j = 0; j < msg.backend_content.length; j++) {
+            var bk = msg.backend_content[j];
+            var raw = typeof bk.content === 'string' ? bk.content : '';
+
+            if (bk.role === 'assistant' && raw.trim()) {
+              // Assistant speech -> render as QQ bubbles
+              try {
+                var html = md.render(raw);
+                var blks = splitBlocks(html);
+                for (var k = 0; k < blks.length; k++) {
+                  var bubble = document.createElement('div');
+                  bubble.className = 'msg-bubble';
+                  bubble.innerHTML = blks[k];
+                  wrapper.appendChild(bubble);
+                  hasContent = true;
+                }
+              } catch(e) {
+                var bubble = document.createElement('div');
+                bubble.className = 'msg-bubble';
+                bubble.textContent = raw;
+                wrapper.appendChild(bubble);
+                hasContent = true;
+              }
+            } else if (bk.role === 'tool' || bk.role === 'tool_result') {
+              var think = document.createElement('div');
+              think.className = 'msg-think';
+              var label = bk.name ? ('<b>' + esc(bk.name) + '</b> ') : '';
+              think.innerHTML = label + esc(raw).substring(0, 300);
+              wrapper.appendChild(think);
+              hasContent = true;
+            }
+          }
+        }
+
+        // Fallback: if no backend_content, use content
+        var c = msg.content || msg.pure_content || '';
+        if (c.trim() && !hasContent) {
+          try {
+            var html2 = md.render(c);
+            var blks2 = splitBlocks(html2);
+            for (var k2 = 0; k2 < blks2.length; k2++) {
+              var bubble = document.createElement('div');
+              bubble.className = 'msg-bubble';
+              bubble.innerHTML = blks2[k2];
+              wrapper.appendChild(bubble);
+            }
+          } catch(e) {
+            var bubble = document.createElement('div');
+            bubble.className = 'msg-bubble';
+            bubble.textContent = c;
+            wrapper.appendChild(bubble);
+          }
+        }
+      }
+
+      function smartRender() {
+        var display = [];
+        for (var i = 0; i < messages.length; i++) {
+          var m = messages[i];
+          if (m.role === 'system' && (!m.content || !m.content.trim())) continue;
+          display.push(m);
+        }
+        var recent = display.slice(-30);
+
+        if (recent.length === 0) {
+          msgArea.classList.add('empty');
+          msgArea.innerHTML = '';
+          return;
+        }
+        msgArea.classList.remove('empty');
+
+        var frag = document.createDocumentFragment();
+        for (var i = recent.length - 1; i >= 0; i--) {
+          var msg = recent[i];
+          if (msg.role === 'user') {
+            var el = document.createElement('div');
+            el.className = 'msg-user';
+            el.textContent = msg.content || '';
+            frag.appendChild(el);
+          } else {
+            var wrapper = document.createElement('div');
+            wrapper.className = 'msg-assistant-wrapper';
+            renderAssistantContent(msg, wrapper);
+            if (wrapper.children.length > 0) frag.appendChild(wrapper);
+          }
+        }
+
+        // Batch swap
+        msgArea.innerHTML = '';
+        msgArea.appendChild(frag);
+
+        requestAnimationFrame(function() {
+          msgArea.scrollTop = msgArea.scrollHeight;
+        });
+      }
+
+      function sendMessage() {
+        var text = userInput.value.trim();
+        if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+        ws.send(JSON.stringify({ type: 'set_user_input', data: { text: text } }));
+        ws.send(JSON.stringify({ type: 'trigger_send_message', data: {} }));
+
+        userInput.value = '';
+        userInput.style.height = 'auto';
+        sendBtn.disabled = true;
+        isGenerating = true;
+
+        messages.push({ role: 'user', content: text, agentName: 'User', timestamp: Date.now() });
+        smartRender();
+      }
+
+      function newConversation() {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        ws.send(JSON.stringify({ type: 'trigger_clear_message', data: {} }));
+        messages = [];
+        msgArea.classList.add('empty');
+        msgArea.innerHTML = '';
+        isGenerating = false;
+      }
+
+      function closeWindow() {
+        if (window.electronAPI && window.electronAPI.closeMinimalWindow) {
+          window.electronAPI.closeMinimalWindow();
+        } else { window.close(); }
+      }
+
+      userInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        sendBtn.disabled = !this.value.trim();
+      });
+      userInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+      });
+      sendBtn.addEventListener('click', sendMessage);
+      closeBtn.addEventListener('click', closeWindow);
+      newChatBtn.addEventListener('click', newConversation);
+
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+      connectWS();
+      userInput.value = '';
+      setTimeout(function() { userInput.focus(); }, 400);
+    })();
+  </script>
+</html>
