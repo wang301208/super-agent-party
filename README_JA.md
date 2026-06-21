@@ -52,7 +52,7 @@
 ![image](doc/image/img-2/vision.jpeg)
 
 #### 複数のウィンドウモード：チャットインターフェースはスマートフォンサイズやカプセルサイズでデスクトップにドッキング可能
-![image](doc/image/img-1/window.jpeg)
+![image](doc/image/img-1/windowmode.jpeg)
 
 #### マルチロールグループチャット：タバーンキャラクターカードと長期記憶に対応し、複数のキャラクターと同時にチャットできます！
 ![image](doc/image/img-2/group.jpeg)
@@ -88,20 +88,20 @@ curl -fsSL https://raw.githubusercontent.com/heshengtao/super-agent-party/main/R
 
 ### Windowsポータブルパッケージ（推奨！インストール不要のソースバージョン、最新リポジトリへのワンクリック同期対応、デスクトップ版のパッケージングを待つ必要なし）
 
-  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.1/super-agent-party-win-v0.4.1.zip)
+  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.2/super-agent-party-win-v0.4.2.zip)
 
 ⭐ 注意！ `一键更新(update).bat` をダブルクリックしてソフトウェアを更新するか、`一键启动(start).bat` をダブルクリックしてソフトウェアを起動できます。OSは **Windows 10/11、Windows Server 2025** 以降が必要です！
 
 ### Windowsデスクトップインストール
 
-  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.1/Super-Agent-Party-Setup-0.4.1.exe)
+  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.2/Super-Agent-Party-Setup-0.4.2.exe)
 
 ⭐ 注意！ インストール時に「現在のユーザーのみにインストール」を選択してください。そうしないと、起動時に管理者権限が必要になります。OSは **Windows 10/11、Windows Server 2025** 以降が必要です！
 
 ### MacOS 統合パッケージ（現在はMチップのみ対応、インストール不要のソースコード版、ワンクリックでリポジトリ最新版に同期可能、デスクトップ版のパッケージ化待ち不要）
 > **開発者/上級ユーザー向け**：インストール不要のソースコード版、ワンクリックでリポジトリ最新版に同期可能、デスクトップ版のパッケージ化待ち不要。
 
-👉 [国際ユーザーはこちらをクリックしてダウンロード](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.1/super-agent-party-mac-v0.4.1.zip) 
+👉 [国際ユーザーはこちらをクリックしてダウンロード](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.2/super-agent-party-mac-v0.4.2.zip) 
 
 #### 🚀 使用方法
 
@@ -124,7 +124,7 @@ chmod +x 一键更新(update).sh 一键启动(start).sh
 
 ### macOSデスクトップインストール（現在Mチップのみ対応）
 
-  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.1/Super-Agent-Party-0.4.1-Mac.dmg)
+  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.2/Super-Agent-Party-0.4.2-Mac.dmg)
 
 ⭐ 注意！ ダウンロード後、dmgファイルのアプリを `/Applications` ディレクトリにドラッグしてください。その後、ターミナルを開き、以下のコマンドを実行してルートパスワードを入力し、ネットワークダウンロードに付与されたQuarantine属性を削除してください：
 
@@ -134,17 +134,9 @@ chmod +x 一键更新(update).sh 一键启动(start).sh
 
 ### Linuxデスクトップインストール
 
-さまざまなシナリオに対応するため、2つの主要なLinuxインストールパッケージ形式を提供しています。
+👉 [Linux-AppImage-X86_64](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.2/Super-Agent-Party-0.4.2-Linux-x86_64.AppImage)
 
-#### 1. `.AppImage` を使用してインストール
-
-`.AppImage` はインストール不要で即座に使用できるLinuxアプリケーション形式です。ほとんどのLinuxディストリビューションに対応しています。
-
-  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.1/Super-Agent-Party-0.4.1-Linux.AppImage)
-
-#### 2. `.deb` パッケージを使用してインストール（Ubuntu/Debianシステム向け）
-
-  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.1/Super-Agent-Party-0.4.1-Linux.deb)
+👉 [Linux-AppImage-Arm64](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.2/Super-Agent-Party-0.4.2-Linux-arm64.AppImage)
 
 ### Dockerデプロイ（このバージョンのデスクトップペットはブラウザからのみ閲覧できます。）
 
